@@ -1,9 +1,13 @@
+const std = @import("std");
+
 pub const errors = @import("errors.zig");
 pub const response = @import("response.zig");
 pub const request_builder = @import("request_builder.zig");
 pub const bucket = @import("bucket.zig");
 pub const rate_limiter = @import("rate_limiter.zig");
 pub const client = @import("client.zig");
+
+pub const HeaderMap = std.StringArrayHashMap([]const u8);
 
 pub const RestError = errors.RestError;
 pub const FluxerAPIError = errors.FluxerAPIError;

@@ -331,7 +331,7 @@ test "EventDispatcher dispatches raw REST" {
 
     const allocator = std.testing.allocator;
     const body = try allocator.dupe(u8, "test body");
-    const headers = std.StringHashMap([]const u8).init(allocator);
+    const headers = @import("../rest/mod.zig").HeaderMap.init(allocator);
     var response = Response{
         .status = .ok,
         .headers = headers,

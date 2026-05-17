@@ -871,15 +871,17 @@ pub const ShardStatus = enum {
 Direct raw HTTP access for advanced use cases.
 
 ```zig
+pub const HeaderMap = std.StringArrayHashMap([]const u8);
+
 pub const RequestOptions = struct {
-    headers: ?std.StringHashMap([]const u8) = null,
+    headers: ?HeaderMap = null,
     body: ?[]const u8 = null,
     query: ?[]const u8 = null,
 };
 
 pub const Response = struct {
     status: std.http.Status,
-    headers: std.StringHashMap([]const u8),
+    headers: HeaderMap,
     body: []const u8,
     allocator: std.mem.Allocator,
 

@@ -3,8 +3,7 @@
 [English README](README.md)
 
 [fluxer](https://fluxer.app) チャットアプリケーションとBotを構築するための、Zig言語の低レベルライブラリです。
-[discord.zig](https://github.com/discord-zig/discord.zig) と [eris](https://github.com/abalabahaha/eris) にインスパイアされ、
-高レベルの利便性と低レベルの細かい制御の両方を提供します。
+[eris](https://github.com/abalabahaha/eris)を参考に、高レベルの利便性と低レベルの細かい制御の両方を提供します。
 
 ## 特徴
 

@@ -2,13 +2,14 @@ const std = @import("std");
 const Response = @import("response.zig").Response;
 const Bucket = @import("bucket.zig").Bucket;
 const BucketState = @import("bucket.zig").BucketState;
+const HeaderMap = @import("mod.zig").HeaderMap;
 
 /// Manages per-route and global rate limits.
 pub const RateLimiter = struct {
     global_limit: u32 = 50,
     global_remaining: u32 = 50,
     global_reset: i64 = 0,
-    buckets: std.StringHashMap(Bucket),
+    buckets: std.StringArrayHashMap(Bucket),
     mutex: std.Thread.Mutex,
     allocator: std.mem.Allocator,
 
@@ -17,7 +18,7 @@ pub const RateLimiter = struct {
             .global_limit = 50,
             .global_remaining = 50,
             .global_reset = 0,
-            .buckets = std.StringHashMap(Bucket).init(allocator),
+            .buckets = std.StringArrayHashMap(Bucket).init(allocator),
             .mutex = .{},
             .allocator = allocator,
         };
@@ -145,7 +146,7 @@ test "RateLimiter submit and update" {
     const mockExecute = struct {
         fn call() anyerror!Response {
             const alloc = std.testing.allocator;
-            var headers = std.StringHashMap([]const u8).init(alloc);
+            var headers = HeaderMap.init(alloc);
             try headers.put(try alloc.dupe(u8, "x-ratelimit-limit"), try alloc.dupe(u8, "5"));
             try headers.put(try alloc.dupe(u8, "x-ratelimit-remaining"), try alloc.dupe(u8, "4"));
             try headers.put(try alloc.dupe(u8, "x-ratelimit-reset"), try alloc.dupe(u8, "9999999999"));

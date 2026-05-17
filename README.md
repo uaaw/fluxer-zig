@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A low-level Zig library for building [fluxer](https://fluxer.app) chat applications and bots.
-Inspired by [discord.zig](https://github.com/discord-zig/discord.zig) and [eris](https://github.com/abalabahaha/eris),
+Inspired by[eris](https://github.com/abalabahaha/eris),
 fluxer-zig provides both high-level convenience and low-level control over the Fluxer API.
 
 ## Features

@@ -1,10 +1,11 @@
 const std = @import("std");
+const HeaderMap = @import("mod.zig").HeaderMap;
 
 /// Builder for constructing HTTP requests with a fluent API.
 pub const RequestBuilder = struct {
     method: std.http.Method,
     path: []const u8,
-    headers: std.StringHashMap([]const u8),
+    headers: HeaderMap,
     body: ?[]const u8,
     query: ?[]const u8,
     allocator: std.mem.Allocator,
@@ -14,7 +15,7 @@ pub const RequestBuilder = struct {
         return .{
             .method = .GET,
             .path = "",
-            .headers = std.StringHashMap([]const u8).init(allocator),
+            .headers = HeaderMap.init(allocator),
             .body = null,
             .query = null,
             .allocator = allocator,

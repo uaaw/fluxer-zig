@@ -1,9 +1,10 @@
 const std = @import("std");
+const HeaderMap = @import("mod.zig").HeaderMap;
 
 /// Represents an HTTP response with parsed status, headers, and body.
 pub const Response = struct {
     status: std.http.Status,
-    headers: std.StringHashMap([]const u8),
+    headers: HeaderMap,
     body: []const u8,
     allocator: std.mem.Allocator,
 
@@ -43,7 +44,7 @@ test "Response json parsing" {
     const raw_body = "{\"id\":12345,\"name\":\"test\"}";
     const body = try allocator.dupe(u8, raw_body);
 
-    var headers = std.StringHashMap([]const u8).init(allocator);
+    var headers = HeaderMap.init(allocator);
     try headers.put(try allocator.dupe(u8, "content-type"), try allocator.dupe(u8, "application/json"));
 
     var response = Response{
@@ -65,7 +66,7 @@ test "Response text returns raw body" {
     const raw_body = "raw text";
     const body = try allocator.dupe(u8, raw_body);
 
-    const headers = std.StringHashMap([]const u8).init(allocator);
+    const headers = HeaderMap.init(allocator);
 
     var response = Response{
         .status = .ok,

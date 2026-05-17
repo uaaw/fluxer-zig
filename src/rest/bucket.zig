@@ -1,4 +1,5 @@
 const std = @import("std");
+const HeaderMap = @import("mod.zig").HeaderMap;
 
 /// Tracks rate-limit state for a single route bucket.
 pub const Bucket = struct {
@@ -50,7 +51,7 @@ pub const Bucket = struct {
     }
 
     /// Updates bucket state from Fluxer API response headers.
-    pub fn updateFromHeaders(self: *Bucket, headers: std.StringHashMap([]const u8)) void {
+    pub fn updateFromHeaders(self: *Bucket, headers: HeaderMap) void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -100,7 +101,7 @@ test "Bucket canExecute and isExpired" {
 test "Bucket updateFromHeaders" {
     var bucket = Bucket.init(std.testing.allocator);
     defer bucket.deinit();
-    var headers = std.StringHashMap([]const u8).init(std.testing.allocator);
+    var headers = HeaderMap.init(std.testing.allocator);
     defer headers.deinit();
 
     try headers.put("x-ratelimit-limit", "5");

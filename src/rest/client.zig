@@ -3,6 +3,7 @@ const Response = @import("response.zig").Response;
 const RateLimiter = @import("rate_limiter.zig").RateLimiter;
 const RestError = @import("errors.zig").RestError;
 const fromStatus = @import("errors.zig").fromStatus;
+const HeaderMap = @import("mod.zig").HeaderMap;
 
 /// Authentication scheme for the Fluxer REST API.
 pub const AuthType = enum {
@@ -24,7 +25,7 @@ pub const AuthType = enum {
 
 /// Options for customizing an HTTP request.
 pub const RequestOptions = struct {
-    headers: ?std.StringHashMap([]const u8) = null,
+    headers: ?HeaderMap = null,
     body: ?[]const u8 = null,
     query: ?[]const u8 = null,
 };
@@ -179,8 +180,8 @@ pub const HttpClient = struct {
     }
 };
 
-fn parseHeaders(allocator: std.mem.Allocator, raw: []const u8) !std.StringHashMap([]const u8) {
-    var map = std.StringHashMap([]const u8).init(allocator);
+fn parseHeaders(allocator: std.mem.Allocator, raw: []const u8) !HeaderMap {
+    var map = HeaderMap.init(allocator);
     errdefer map.deinit();
 
     var lines = std.mem.splitSequence(u8, raw, "\r\n");
