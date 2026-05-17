@@ -147,10 +147,10 @@ test "RateLimiter submit and update" {
         fn call() anyerror!Response {
             const alloc = std.testing.allocator;
             var headers = HeaderMap.init(alloc);
-            try headers.put(try alloc.dupe(u8, "x-ratelimit-limit"), try alloc.dupe(u8, "5"));
-            try headers.put(try alloc.dupe(u8, "x-ratelimit-remaining"), try alloc.dupe(u8, "4"));
-            try headers.put(try alloc.dupe(u8, "x-ratelimit-reset"), try alloc.dupe(u8, "9999999999"));
-            try headers.put(try alloc.dupe(u8, "x-ratelimit-reset-after"), try alloc.dupe(u8, "60"));
+            try headers.put("x-ratelimit-limit", "5");
+            try headers.put("x-ratelimit-remaining", "4");
+            try headers.put("x-ratelimit-reset", "9999999999");
+            try headers.put("x-ratelimit-reset-after", "60");
             return Response{
                 .status = .ok,
                 .headers = headers,

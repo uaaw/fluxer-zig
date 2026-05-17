@@ -871,7 +871,13 @@ pub const ShardStatus = enum {
 高度なユースケース向けの生のHTTPアクセス。
 
 ```zig
-pub const HeaderMap = std.StringArrayHashMap([]const u8);
+pub const HeaderMap = struct {
+    pub fn init(allocator: std.mem.Allocator) HeaderMap;
+    pub fn deinit(self: *HeaderMap) void;
+    pub fn put(self: *HeaderMap, name: []const u8, value: []const u8) !void;
+    pub fn get(self: HeaderMap, name: []const u8) ?[]const u8;
+    pub fn iterator(self: HeaderMap) Iterator;
+};
 
 pub const RequestOptions = struct {
     headers: ?HeaderMap = null,

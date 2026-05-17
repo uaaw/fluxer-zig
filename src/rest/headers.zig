@@ -39,8 +39,20 @@ pub const HeaderMap = struct {
         return null;
     }
 
-    pub fn iterator(self: HeaderMap) std.ArrayList(Entry).Iterator {
-        return self.entries.iterator();
+    pub const Iterator = struct {
+        items: []const Entry,
+        index: usize = 0,
+
+        pub fn next(self: *Iterator) ?Entry {
+            if (self.index >= self.items.len) return null;
+            const entry = self.items[self.index];
+            self.index += 1;
+            return entry;
+        }
+    };
+
+    pub fn iterator(self: HeaderMap) Iterator {
+        return .{ .items = self.entries.items };
     }
 };
 

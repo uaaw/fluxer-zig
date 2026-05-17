@@ -24,11 +24,6 @@ pub const Response = struct {
     /// Releases all memory owned by this response.
     pub fn deinit(self: *Response) void {
         self.allocator.free(self.body);
-        var it = self.headers.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.*);
-        }
         self.headers.deinit();
     }
 };
@@ -45,7 +40,7 @@ test "Response json parsing" {
     const body = try allocator.dupe(u8, raw_body);
 
     var headers = HeaderMap.init(allocator);
-    try headers.put(try allocator.dupe(u8, "content-type"), try allocator.dupe(u8, "application/json"));
+    try headers.put("content-type", "application/json");
 
     var response = Response{
         .status = .ok,

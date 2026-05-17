@@ -36,8 +36,7 @@ pub const RequestBuilder = struct {
 
     /// Adds a header. Value is duplicated.
     pub fn header(self: *RequestBuilder, k: []const u8, v: []const u8) *RequestBuilder {
-        const duped = self.allocator.dupe(u8, v) catch unreachable;
-        self.headers.put(k, duped) catch unreachable;
+        self.headers.put(k, v) catch unreachable;
         return self;
     }
 
@@ -69,10 +68,6 @@ pub const RequestBuilder = struct {
 
     /// Releases all owned memory.
     pub fn deinit(self: *RequestBuilder) void {
-        var it = self.headers.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.value_ptr.*);
-        }
         self.headers.deinit();
         if (self.body) |b| self.allocator.free(b);
         if (self.query) |q| self.allocator.free(q);

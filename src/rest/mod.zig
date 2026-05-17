@@ -7,7 +7,8 @@ pub const bucket = @import("bucket.zig");
 pub const rate_limiter = @import("rate_limiter.zig");
 pub const client = @import("client.zig");
 
-pub const HeaderMap = std.StringArrayHashMap([]const u8);
+pub const headers_module = @import("headers.zig");
+pub const HeaderMap = headers_module.HeaderMap;
 
 pub const RestError = errors.RestError;
 pub const FluxerAPIError = errors.FluxerAPIError;

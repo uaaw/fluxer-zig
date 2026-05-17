@@ -100,8 +100,8 @@ pub const HttpClient = struct {
             var it = opts_headers.iterator();
             while (it.next()) |entry| {
                 try extra_headers.append(.{
-                    .name = try self.allocator.dupe(u8, entry.key_ptr.*),
-                    .value = try self.allocator.dupe(u8, entry.value_ptr.*),
+                    .name = try self.allocator.dupe(u8, entry.name),
+                    .value = try self.allocator.dupe(u8, entry.value),
                 });
             }
         }
@@ -131,12 +131,8 @@ pub const HttpClient = struct {
         errdefer response_body.deinit();
         try req.reader().readAllArrayList(&response_body, 10 * 1024 * 1024);
 
-        const headers = try parseHeaders(self.allocator, req.response.parser.get());
+        var headers = try parseHeaders(self.allocator, req.response.parser.get());
         errdefer {
-            var it = headers.iterator();
-            while (it.next()) |entry| {
-                self.allocator.free(entry.value_ptr.*);
-            }
             headers.deinit();
         }
 
@@ -194,9 +190,7 @@ fn parseHeaders(allocator: std.mem.Allocator, raw: []const u8) !HeaderMap {
             const name = std.mem.trim(u8, line[0..colon], " \t");
             const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
             if (name.len > 0) {
-                const duped_name = try allocator.dupe(u8, name);
-                const duped_value = try allocator.dupe(u8, value);
-                try map.put(duped_name, duped_value);
+                try map.put(name, value);
             }
         }
     }
