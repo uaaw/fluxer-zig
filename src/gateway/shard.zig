@@ -324,13 +324,14 @@ pub const Shard = struct {
         self.tls_client = tls_client;
         self.status = .connecting;
         self.running.store(true, .monotonic);
-        self.receive_thread = std.Thread.spawn(.{}, Shard.receiveLoop, .{self}) catch |err| {
+        const recv_thread = std.Thread.spawn(.{}, Shard.receiveLoop, .{self}) catch |err| {
             stream.close();
             self.stream = null;
             self.tls_client = null;
             self.status = .disconnected;
             return err;
         };
+        self.receive_thread = recv_thread;
 
         self.resetReconnectState();
     }
@@ -452,9 +453,11 @@ pub const Shard = struct {
     fn startHeartbeat(self: *Shard) void {
         if (builtin.is_test) return;
         if (self.heartbeat_thread != null) return;
-        self.heartbeat_thread = std.Thread.spawn(.{}, Shard.heartbeatLoop, .{self}) catch |err| {
+        const hb_thread = std.Thread.spawn(.{}, Shard.heartbeatLoop, .{self}) catch |err| {
             std.log.err("failed to spawn heartbeat thread: {s}", .{@errorName(err)});
+            return;
         };
+        self.heartbeat_thread = hb_thread;
     }
 
     /// WebSocket receive loop. Runs in a dedicated thread.
