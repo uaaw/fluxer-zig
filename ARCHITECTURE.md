@@ -197,7 +197,7 @@ Responsibilities:
 - Handle payload length encoding (7/16/64-bit) per RFC 6455
 - Apply and unapply XOR masking for client-to-server frames
 - Use a caller-provided buffer for small payloads; heap-allocate only when necessary
-- Note: TLS encryption is not yet implemented; plain TCP is used currently (`std.crypto.tls.Client` is planned for a future release)
+- TLS encryption is implemented via `std.crypto.tls.Client` in `gateway/shard.zig`. The TLS handshake uses the OS CA bundle (`std.crypto.Certificate.Bundle.rescan`), and all WebSocket frames are read/written through the TLS layer.
 
 ### 10. root.zig (Library Root)
 Public re-exports and library entry point.

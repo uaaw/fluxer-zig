@@ -12,4 +12,4 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- fix gateway clarify TLS not implemented for wss:// connections
+- feat gateway add TLS support for wss:// connections

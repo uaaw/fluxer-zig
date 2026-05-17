@@ -845,8 +845,8 @@ pub const Shard = struct {
     pub fn deinit(self: *Shard) void;
 
     /// ゲートウェイへの接続を開始します。
-    /// **制限事項:** TLS（wss://）は未対応です。平文TCP（ポート443）を使用しており、
-    /// TLS必須のエンドポイントでは拒否されます。失敗時は `error.TLSTransportNotImplemented` を返します。
+    /// TCP接続後、`std.crypto.tls.Client` を使用してOSのCAバンドルでTLSハンドシェイクを行い、
+    /// HTTP WebSocketアップグレードリクエストを送信します。証明書検証はデフォルトで有効です。
     pub fn connect(self: *Shard) !void;
     pub fn disconnect(self: *Shard) void;
     pub fn sendRaw(self: *Shard, text: []const u8) !void;

@@ -174,7 +174,7 @@ defer sm.stopAll();
 
 ## Known Limitations
 
-- **Gateway TLS (wss://) is not yet fully implemented.** The current `Shard.connect()` uses plain TCP on port 443, which will be rejected by TLS-only endpoints. A future release will add TLS support via `std.crypto.tls.Client` or an external TLS library.
+- **Gateway TLS (wss://) is now supported (beta).** `Shard.connect()` uses `std.crypto.tls.Client` with the OS CA bundle for TLS handshake. Certificate verification is enabled by default; if the OS CA bundle cannot be scanned, the handshake may fail on TLS-only endpoints.
 
 ## Contributing
 

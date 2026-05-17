@@ -845,8 +845,8 @@ pub const Shard = struct {
     pub fn deinit(self: *Shard) void;
 
     /// Initiates a connection to the gateway.
-    /// **Limitation:** TLS (wss://) is not yet fully implemented. Plain TCP on port 443 is used,
-    /// which will be rejected by TLS-only endpoints. Returns `error.TLSTransportNotImplemented` on failure.
+    /// Performs TCP connect and TLS handshake via `std.crypto.tls.Client` using the OS CA bundle,
+    /// then sends the HTTP WebSocket upgrade request. TLS verification is enabled by default.
     pub fn connect(self: *Shard) !void;
     pub fn disconnect(self: *Shard) void;
     pub fn sendRaw(self: *Shard, text: []const u8) !void;

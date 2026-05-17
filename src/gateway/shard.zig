@@ -5,6 +5,31 @@ const heartbeat = @import("heartbeat.zig");
 const websocket = @import("../websocket/mod.zig");
 const errors = @import("errors.zig");
 
+/// TLS stream wrapper that adapts `std.crypto.tls.Client` to the `AnyReader`/`AnyWriter` interface.
+const TLSStream = struct {
+    tcp: std.net.Stream,
+    client: std.crypto.tls.Client,
+
+    pub fn read(self: *TLSStream, buffer: []u8) !usize {
+        return self.client.read(self.tcp, buffer);
+    }
+
+    pub fn write(self: *TLSStream, bytes: []const u8) !usize {
+        return self.client.write(self.tcp, bytes);
+    }
+
+    pub const Reader = std.io.GenericReader(*TLSStream, anyerror, read);
+    pub const Writer = std.io.GenericWriter(*TLSStream, anyerror, write);
+
+    pub fn reader(self: *TLSStream) Reader {
+        return .{ .context = self };
+    }
+
+    pub fn writer(self: *TLSStream) Writer {
+        return .{ .context = self };
+    }
+};
+
 /// Fluxer Gateway WebSocket URL.
 /// Uses API version 1 and JSON encoding as required by the fluxer spec.
 pub const gateway_url = "wss://gateway.fluxer.app/?v=1&encoding=json";
@@ -35,6 +60,7 @@ pub const Shard = struct {
 
     // Network state
     stream: ?std.net.Stream,
+    tls_client: ?std.crypto.tls.Client,
     receive_thread: ?std.Thread,
     running: std.atomic.Value(bool),
     receive_mutex: std.Thread.Mutex,
@@ -69,6 +95,7 @@ pub const Shard = struct {
             .hb = heartbeat.Heartbeat.init(heartbeat_interval_ms),
             .allocator = allocator,
             .stream = null,
+            .tls_client = null,
             .receive_thread = null,
             .running = std.atomic.Value(bool).init(false),
             .receive_mutex = .{},
@@ -141,8 +168,8 @@ pub const Shard = struct {
     }
 
     /// Initiates a connection to the gateway.
-    /// Parses the WebSocket URL, performs TCP connect, sends HTTP upgrade,
-    /// verifies 101 response, and starts the receive thread.
+    /// Parses the WebSocket URL, performs TCP connect and TLS handshake,
+    /// sends HTTP upgrade, verifies 101 response, and starts the receive thread.
     pub fn connect(self: *Shard) !void {
         self.receive_mutex.lock();
         defer self.receive_mutex.unlock();
@@ -160,14 +187,31 @@ pub const Shard = struct {
         const host = url[host_start..path_start];
         const path = url[path_start..];
 
-        // TCP connect. Note: TLS is not yet fully implemented.
-        // For wss://, we currently attempt plain TCP which will fail on TLS-only endpoints.
+        // TCP connect
         const stream = std.net.tcpConnectToHost(self.allocator, host, 443) catch |err| {
             self.status = .disconnected;
             if (!builtin.is_test) {
-                std.log.err("Failed to connect to {s}: {s}. NOTE: TLS transport for wss:// is not yet fully implemented. Plain TCP on port 443 may be rejected by TLS-only endpoints.", .{ host, @errorName(err) });
+                std.log.err("Failed to TCP connect to {s}: {s}", .{ host, @errorName(err) });
             }
-            return error.TLSTransportNotImplemented;
+            return err;
+        };
+        errdefer stream.close();
+
+        // TLS handshake using OS CA bundle
+        var ca_bundle: std.crypto.Certificate.Bundle = .{};
+        defer ca_bundle.deinit(self.allocator);
+        ca_bundle.rescan(self.allocator) catch |err| {
+            if (!builtin.is_test) {
+                std.log.warn("Failed to rescan OS CA bundle: {s}. Continuing with empty bundle.", .{@errorName(err)});
+            }
+        };
+        var tls_client = std.crypto.tls.Client.init(stream, ca_bundle, host) catch |err| {
+            stream.close();
+            self.status = .disconnected;
+            if (!builtin.is_test) {
+                std.log.err("TLS handshake with {s} failed: {s}", .{ host, @errorName(err) });
+            }
+            return err;
         };
 
         // Build HTTP upgrade request
@@ -187,23 +231,23 @@ pub const Shard = struct {
         try req_writer.writeAll("Sec-WebSocket-Version: 13\r\n");
         try req_writer.writeAll("\r\n");
 
-        stream.writeAll(fbs.getWritten()) catch |err| {
+        tls_client.writeAll(stream, fbs.getWritten()) catch |err| {
             stream.close();
             self.status = .disconnected;
             return err;
         };
 
-        // Read HTTP response until \r\n\r\n
+        // Read HTTP response until \r\n\r\n via TLS
         var resp_buf: [4096]u8 = undefined;
         var resp_len: usize = 0;
         while (resp_len < resp_buf.len) {
-            const byte = stream.reader().readByte() catch |err| {
+            const n = tls_client.read(stream, resp_buf[resp_len..]) catch |err| {
                 stream.close();
                 self.status = .disconnected;
                 return err;
             };
-            resp_buf[resp_len] = byte;
-            resp_len += 1;
+            if (n == 0) break;
+            resp_len += n;
             if (resp_len >= 4 and std.mem.eql(u8, resp_buf[resp_len - 4 .. resp_len], "\r\n\r\n")) {
                 break;
             }
@@ -241,11 +285,13 @@ pub const Shard = struct {
         }
 
         self.stream = stream;
+        self.tls_client = tls_client;
         self.status = .identifying;
         self.running.store(true, .monotonic);
         self.receive_thread = std.Thread.spawn(.{}, Shard.receiveLoop, .{self}) catch |err| {
             stream.close();
             self.stream = null;
+            self.tls_client = null;
             self.status = .disconnected;
             return err;
         };
@@ -260,6 +306,10 @@ pub const Shard = struct {
         self.receive_mutex.lock();
         if (self.stream) |s| {
             _ = sendCloseFrameNoLock(self) catch {};
+            if (self.tls_client) |*tls| {
+                _ = tls.writeAllEnd(s, &.{}, true) catch {};
+                self.tls_client = null;
+            }
             s.close();
             self.stream = null;
         }
@@ -275,8 +325,14 @@ pub const Shard = struct {
 
     fn sendCloseFrameNoLock(self: *Shard) !void {
         if (self.stream) |s| {
-            const writer = s.writer();
-            try websocket.serializeClose(writer.any(), @intFromEnum(errors.CloseCode.normal), null);
+            if (self.tls_client) |tls| {
+                var tls_stream = TLSStream{ .tcp = s, .client = tls };
+                const writer = tls_stream.writer();
+                try websocket.serializeClose(writer.any(), @intFromEnum(errors.CloseCode.normal), null);
+            } else {
+                const writer = s.writer();
+                try websocket.serializeClose(writer.any(), @intFromEnum(errors.CloseCode.normal), null);
+            }
         }
     }
 
@@ -285,8 +341,14 @@ pub const Shard = struct {
         self.receive_mutex.lock();
         defer self.receive_mutex.unlock();
         if (self.stream) |s| {
-            const writer = s.writer();
-            try websocket.serializeText(writer.any(), text);
+            if (self.tls_client) |tls| {
+                var tls_stream = TLSStream{ .tcp = s, .client = tls };
+                const writer = tls_stream.writer();
+                try websocket.serializeText(writer.any(), text);
+            } else {
+                const writer = s.writer();
+                try websocket.serializeText(writer.any(), text);
+            }
         } else {
             return error.NotConnected;
         }
@@ -297,6 +359,7 @@ pub const Shard = struct {
     pub fn receiveLoop(self: *Shard) void {
         self.receive_mutex.lock();
         const stream_opt = self.stream;
+        const tls_client_opt = self.tls_client;
         self.receive_mutex.unlock();
 
         const stream = stream_opt orelse {
@@ -305,8 +368,10 @@ pub const Shard = struct {
         };
 
         var buffer: [4096]u8 = undefined;
+        var tls_stream: ?TLSStream = if (tls_client_opt) |tls| TLSStream{ .tcp = stream, .client = tls } else null;
         while (self.running.load(.monotonic)) {
-            const reader = stream.reader().any();
+            const reader = if (tls_stream) |*ts| ts.reader().any() else stream.reader().any();
+
             var frame = websocket.parseFrame(reader, self.allocator, &buffer) catch |err| {
                 self.status = .resuming;
                 switch (err) {
@@ -337,8 +402,14 @@ pub const Shard = struct {
                 .ping => {
                     self.receive_mutex.lock();
                     if (self.stream) |s| {
-                        const writer = s.writer();
-                        websocket.serializeFrame(writer.any(), .pong, frame.payload) catch {};
+                        if (self.tls_client) |tls| {
+                            var ping_tls_stream = TLSStream{ .tcp = s, .client = tls };
+                            const writer = ping_tls_stream.writer();
+                            websocket.serializeFrame(writer.any(), .pong, frame.payload) catch {};
+                        } else {
+                            const writer = s.writer();
+                            websocket.serializeFrame(writer.any(), .pong, frame.payload) catch {};
+                        }
                     }
                     self.receive_mutex.unlock();
                 },
@@ -357,9 +428,16 @@ pub const Shard = struct {
                     self.receive_mutex.lock();
                     defer self.receive_mutex.unlock();
                     if (self.stream) |s| {
-                        const writer = s.writer();
-                        const code_to_echo = close_code orelse @intFromEnum(errors.CloseCode.normal);
-                        websocket.serializeClose(writer.any(), code_to_echo, null) catch {};
+                        if (self.tls_client) |tls| {
+                            var close_tls_stream = TLSStream{ .tcp = s, .client = tls };
+                            const writer = close_tls_stream.writer();
+                            const code_to_echo = close_code orelse @intFromEnum(errors.CloseCode.normal);
+                            websocket.serializeClose(writer.any(), code_to_echo, null) catch {};
+                        } else {
+                            const writer = s.writer();
+                            const code_to_echo = close_code orelse @intFromEnum(errors.CloseCode.normal);
+                            websocket.serializeClose(writer.any(), code_to_echo, null) catch {};
+                        }
                     }
                     self.status = .disconnected;
                     break;
@@ -373,6 +451,7 @@ pub const Shard = struct {
             s.close();
             self.stream = null;
         }
+        self.tls_client = null;
         self.receive_mutex.unlock();
         self.status = .disconnected;
     }

@@ -186,7 +186,7 @@ defer sm.stopAll();
 
 ## 既知の制限事項
 
-- **Gateway接続のTLS（wss://）は未対応です。** 現在の `Shard.connect()` は平文TCP（ポート443）を使用しており、TLS必須のエンドポイントでは拒否されます。今後のリリースで `std.crypto.tls.Client` または外部TLSライブラリを使用したTLS対応を予定しています。
+- **Gateway接続のTLS（wss://）に対応しました（ベータ）。** `Shard.connect()` は `std.crypto.tls.Client` を使用し、OSのCAバンドルを読み込んでTLSハンドシェイクを行います。証明書検証はデフォルトで有効です。OSのCAバンドルが読み込めない場合、TLS必須のエンドポイントでは接続に失敗する可能性があります。
 
 ## 貢献方法
 
