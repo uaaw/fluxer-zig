@@ -1,0 +1,7 @@
+.zig-cache/
+zig-out/
+DEVELOP.md
+fluxer/
+research/
+build/
+docgen_tmp/

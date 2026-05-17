@@ -1,0 +1,17 @@
+.{
+    .name = "fluxer",
+    .version = "0.0.1",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "ARCHITECTURE.md",
+        "API_DESIGN.md",
+        "DEVELOP.md",
+    },
+}
