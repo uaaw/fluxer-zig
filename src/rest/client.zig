@@ -120,6 +120,8 @@ pub const HttpClient = struct {
             req.transfer_encoding = .{ .content_length = body.len };
         }
 
+        try self.rate_limiter.waitForRateLimit(path);
+
         try req.send();
         if (options.body) |body| {
             try req.writeAll(body);
@@ -168,6 +170,11 @@ pub const HttpClient = struct {
     /// Convenience wrapper for PATCH.
     pub fn patch(self: *HttpClient, path: []const u8, body: ?[]const u8) !Response {
         return self.request(.PATCH, path, .{ .body = body });
+    }
+
+    /// Convenience wrapper for PUT.
+    pub fn put(self: *HttpClient, path: []const u8, body: ?[]const u8) !Response {
+        return self.request(.PUT, path, .{ .body = body });
     }
 
     /// Convenience wrapper for DELETE.

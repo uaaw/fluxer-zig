@@ -32,6 +32,41 @@ pub const RateLimiter = struct {
         self.buckets.deinit();
     }
 
+    /// Waits for both bucket and global rate limits, then atomically decrements.
+    /// Call this BEFORE executing the HTTP request.
+    pub fn waitForRateLimit(self: *RateLimiter, route: []const u8) !void {
+        while (true) {
+            self.mutex.lock();
+            const bucket = self.buckets.getPtr(route) orelse blk: {
+                const result = try self.buckets.getOrPut(route);
+                if (!result.found_existing) {
+                    result.value_ptr.* = Bucket.init(self.allocator);
+                }
+                break :blk result.value_ptr;
+            };
+            const can_exec = bucket.canExecute();
+            self.mutex.unlock();
+            if (can_exec) break;
+            std.time.sleep(100 * std.time.ns_per_ms);
+        }
+
+        while (true) {
+            self.mutex.lock();
+            const now = std.time.timestamp();
+            if (now >= self.global_reset) {
+                self.global_remaining = self.global_limit;
+                self.global_reset = 0;
+            }
+            if (self.global_remaining > 0) {
+                self.global_remaining -= 1;
+                self.mutex.unlock();
+                break;
+            }
+            self.mutex.unlock();
+            std.time.sleep(100 * std.time.ns_per_ms);
+        }
+    }
+
     /// Submits a request, respecting rate limits.
     pub fn submit(
         self: *RateLimiter,
@@ -132,8 +167,6 @@ pub const RateLimiter = struct {
                 0;
             self.global_reset = std.time.timestamp() + retry_after;
             self.global_remaining = 0;
-        } else {
-            if (self.global_remaining > 0) self.global_remaining -= 1;
         }
     }
 };

@@ -155,7 +155,8 @@ pub const Cache = struct {
     pub fn upsertMember(self: *Cache, guild_id: Snowflake, member: GuildMember) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const key = composeMemberKey(guild_id, member.user.?.id);
+        const user = member.user orelse return error.MissingUser;
+        const key = composeMemberKey(guild_id, user.id);
         try self.members.put(key, member);
     }
 
@@ -279,6 +280,21 @@ test "Cache message limit eviction" {
     try cache.upsertMessage(m3);
 
     try std.testing.expectEqual(@as(usize, 2), cache.messages.count());
+}
+
+test "Cache upsertMember with null user returns error" {
+    const allocator = std.testing.allocator;
+    var cache = try Cache.init(allocator, .{});
+    defer cache.deinit();
+
+    const member = GuildMember{
+        .user = null,
+        .roles = &.{},
+        .joined_at = "2024-01-01T00:00:00.000Z",
+        .deaf = false,
+        .mute = false,
+    };
+    try std.testing.expectError(error.MissingUser, cache.upsertMember(Snowflake.fromU64(999), member));
 }
 
 test "Cache member CRUD" {

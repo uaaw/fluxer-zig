@@ -12,10 +12,9 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
-    const mod = b.addModule("fluxer", .{
+    _ = b.addModule("fluxer", .{
         .root_source_file = b.path("src/root.zig"),
     });
-    lib.root_module.addImport("fluxer", mod);
 
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),

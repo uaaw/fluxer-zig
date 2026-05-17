@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const rest = @import("rest/mod.zig");
 const models = @import("models/mod.zig");
 const cache_mod = @import("cache/mod.zig");
@@ -16,6 +17,25 @@ const Message = models.Message;
 const GuildMember = models.GuildMember;
 const Cache = cache_mod.Cache;
 const CacheOptions = cache_mod.CacheOptions;
+const Role = models.Role;
+
+const Ban = struct {
+    reason: ?[]const u8 = null,
+    user: User,
+};
+
+const GatewayBotResponse = struct {
+    url: []const u8,
+    shards: u32 = 1,
+    session_start_limit: SessionStartLimit,
+};
+
+const SessionStartLimit = struct {
+    total: u32,
+    remaining: u32,
+    reset_after: u64,
+    max_concurrency: u32,
+};
 
 /// Options for configuring the Client.
 pub const ClientOptions = struct {
@@ -35,6 +55,8 @@ pub const Client = struct {
     cache: Cache,
     dispatcher: ?gateway.EventDispatcher = null,
     options: ClientOptions,
+    shutdown_signal: std.atomic.Value(bool),
+    reconnect_enabled: bool = true,
     token_owned: []const u8,
 
     /// Creates a new Client with the given allocator and options.
@@ -52,6 +74,7 @@ pub const Client = struct {
             .cache = cache,
             .options = options,
             .token_owned = token,
+            .shutdown_signal = std.atomic.Value(bool).init(false),
         };
     }
 
@@ -279,6 +302,206 @@ pub const Client = struct {
         var resp = try self.http.get(path);
         defer resp.deinit();
         return std.json.parseFromSlice(User, self.allocator, resp.body, .{});
+    }
+
+    /// Signals shutdown to the run loop.
+    pub fn shutdown(self: *Client) void {
+        self.shutdown_signal.store(true, .monotonic);
+        self.disconnect();
+    }
+
+    /// Connects and enters a reconnect loop. Blocks the calling thread until shutdown() is called.
+    pub fn run(self: *Client, handler: gateway.EventHandler, handler_ctx: *anyopaque) !void {
+        self.reconnect_enabled = true;
+        self.shutdown_signal.store(false, .monotonic);
+        while (!self.shutdown_signal.load(.monotonic)) {
+            self.connect(handler, handler_ctx) catch |err| {
+                if (!builtin.is_test) {
+                    std.log.err("Client connect failed: {s}", .{@errorName(err)});
+                }
+            };
+            if (self.shutdown_signal.load(.monotonic)) break;
+            if (!self.reconnect_enabled) break;
+            var backoff_ms: u64 = 1000;
+            var attempt: u32 = 0;
+            while (attempt < 5 and !self.shutdown_signal.load(.monotonic)) : (attempt += 1) {
+                std.time.sleep(backoff_ms * std.time.ns_per_ms);
+                backoff_ms = @min(backoff_ms * 2, 60000);
+            }
+        }
+    }
+
+    // Reactions
+
+    pub fn createReaction(self: *Client, channel_id: Snowflake, message_id: Snowflake, emoji: []const u8) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/messages/{d}/reactions/{s}/@me", .{ channel_id.toU64(), message_id.toU64(), emoji });
+        defer self.allocator.free(path);
+        var resp = try self.http.put(path, null);
+        defer resp.deinit();
+    }
+
+    pub fn deleteOwnReaction(self: *Client, channel_id: Snowflake, message_id: Snowflake, emoji: []const u8) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/messages/{d}/reactions/{s}/@me", .{ channel_id.toU64(), message_id.toU64(), emoji });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn deleteUserReaction(self: *Client, channel_id: Snowflake, message_id: Snowflake, emoji: []const u8, user_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/messages/{d}/reactions/{s}/{d}", .{ channel_id.toU64(), message_id.toU64(), emoji, user_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn deleteAllReactions(self: *Client, channel_id: Snowflake, message_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/messages/{d}/reactions", .{ channel_id.toU64(), message_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn deleteAllReactionsForEmoji(self: *Client, channel_id: Snowflake, message_id: Snowflake, emoji: []const u8) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/messages/{d}/reactions/{s}", .{ channel_id.toU64(), message_id.toU64(), emoji });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    // Typing
+
+    pub fn triggerTypingIndicator(self: *Client, channel_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/typing", .{channel_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.post(path, null);
+        defer resp.deinit();
+    }
+
+    // User
+
+    pub fn modifyCurrentUser(self: *Client, data: anytype) !std.json.Parsed(User) {
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch("/users/@me", body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(User, self.allocator, resp.body, .{});
+    }
+
+    // Guild management
+
+    pub fn modifyGuild(self: *Client, id: Snowflake, data: anytype) !std.json.Parsed(Guild) {
+        const path = try guildPath(self.allocator, id);
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Guild, self.allocator, resp.body, .{});
+    }
+
+    pub fn deleteGuild(self: *Client, id: Snowflake) !void {
+        const path = try guildPath(self.allocator, id);
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn getGuildRoles(self: *Client, id: Snowflake) !std.json.Parsed([]Role) {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/roles", .{id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]Role, self.allocator, resp.body, .{});
+    }
+
+    pub fn createGuildRole(self: *Client, guild_id: Snowflake, data: anytype) !std.json.Parsed(Role) {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/roles", .{guild_id.toU64()});
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{});
+    }
+
+    pub fn modifyGuildRole(self: *Client, guild_id: Snowflake, role_id: Snowflake, data: anytype) !std.json.Parsed(Role) {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/roles/{d}", .{ guild_id.toU64(), role_id.toU64() });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{});
+    }
+
+    pub fn deleteGuildRole(self: *Client, guild_id: Snowflake, role_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/roles/{d}", .{ guild_id.toU64(), role_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn getGuildBans(self: *Client, id: Snowflake) !std.json.Parsed([]Ban) {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/bans", .{id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]Ban, self.allocator, resp.body, .{});
+    }
+
+    pub fn createGuildBan(self: *Client, guild_id: Snowflake, user_id: Snowflake, data: anytype) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/bans/{d}", .{ guild_id.toU64(), user_id.toU64() });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.put(path, body);
+        defer resp.deinit();
+    }
+
+    pub fn deleteGuildBan(self: *Client, guild_id: Snowflake, user_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/bans/{d}", .{ guild_id.toU64(), user_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn kickGuildMember(self: *Client, guild_id: Snowflake, user_id: Snowflake) !void {
+        const path = try guildMemberPath(self.allocator, guild_id, user_id);
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    // Pins
+
+    pub fn pinMessage(self: *Client, channel_id: Snowflake, message_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/pins/{d}", .{ channel_id.toU64(), message_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.put(path, null);
+        defer resp.deinit();
+    }
+
+    pub fn unpinMessage(self: *Client, channel_id: Snowflake, message_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/pins/{d}", .{ channel_id.toU64(), message_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn getPinnedMessages(self: *Client, channel_id: Snowflake) !std.json.Parsed([]Message) {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/pins", .{channel_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]Message, self.allocator, resp.body, .{});
+    }
+
+    // Gateway
+
+    pub fn getGatewayBot(self: *Client) !std.json.Parsed(GatewayBotResponse) {
+        var resp = try self.http.get("/gateway/bot");
+        defer resp.deinit();
+        return std.json.parseFromSlice(GatewayBotResponse, self.allocator, resp.body, .{});
     }
 };
 

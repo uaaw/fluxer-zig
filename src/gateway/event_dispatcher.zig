@@ -12,6 +12,7 @@ const GuildMember = @import("../models/guild_member.zig").GuildMember;
 const GuildMemberRemovePayload = @import("delete_payloads.zig").GuildMemberRemovePayload;
 const Cache = @import("../cache/cache.zig").Cache;
 const Snowflake = @import("../models/snowflake.zig").Snowflake;
+const dp = @import("delete_payloads.zig");
 
 /// VTable for event handlers.
 pub const EventHandler = struct {
@@ -29,6 +30,35 @@ pub const EventHandler = struct {
         onGuildMemberAdd: *const fn (ptr: *anyopaque, payload: GuildMember) void,
         onGuildMemberUpdate: *const fn (ptr: *anyopaque, payload: GuildMember) void,
         onGuildMemberRemove: *const fn (ptr: *anyopaque, payload: GuildMemberRemovePayload) void,
+        onMessageReactionAdd: *const fn (ptr: *anyopaque, payload: dp.MessageReactionAddPayload) void,
+        onMessageReactionRemove: *const fn (ptr: *anyopaque, payload: dp.MessageReactionRemovePayload) void,
+        onMessageReactionRemoveAll: *const fn (ptr: *anyopaque, payload: dp.MessageReactionRemoveAllPayload) void,
+        onMessageReactionRemoveEmoji: *const fn (ptr: *anyopaque, payload: dp.MessageReactionRemoveEmojiPayload) void,
+        onMessageDeleteBulk: *const fn (ptr: *anyopaque, payload: dp.MessageDeleteBulkPayload) void,
+        onGuildRoleCreate: *const fn (ptr: *anyopaque, payload: dp.GuildRoleCreatePayload) void,
+        onGuildRoleUpdate: *const fn (ptr: *anyopaque, payload: dp.GuildRoleUpdatePayload) void,
+        onGuildRoleDelete: *const fn (ptr: *anyopaque, payload: dp.GuildRoleDeletePayload) void,
+        onGuildBanAdd: *const fn (ptr: *anyopaque, payload: dp.GuildBanAddPayload) void,
+        onGuildBanRemove: *const fn (ptr: *anyopaque, payload: dp.GuildBanRemovePayload) void,
+        onTypingStart: *const fn (ptr: *anyopaque, payload: dp.TypingStartPayload) void,
+        onWebhooksUpdate: *const fn (ptr: *anyopaque, payload: dp.WebhooksUpdatePayload) void,
+        onInviteCreate: *const fn (ptr: *anyopaque, payload: dp.InviteCreatePayload) void,
+        onInviteDelete: *const fn (ptr: *anyopaque, payload: dp.InviteDeletePayload) void,
+        onVoiceStateUpdate: *const fn (ptr: *anyopaque, payload: dp.VoiceStateUpdatePayload) void,
+        onVoiceServerUpdate: *const fn (ptr: *anyopaque, payload: dp.VoiceServerUpdatePayload) void,
+        onPresenceUpdate: *const fn (ptr: *anyopaque, payload: dp.PresenceUpdatePayload) void,
+        onThreadCreate: *const fn (ptr: *anyopaque, payload: Channel) void,
+        onThreadUpdate: *const fn (ptr: *anyopaque, payload: Channel) void,
+        onThreadDelete: *const fn (ptr: *anyopaque, payload: Channel) void,
+        onThreadListSync: *const fn (ptr: *anyopaque, payload: dp.ThreadListSyncPayload) void,
+        onThreadMemberUpdate: *const fn (ptr: *anyopaque, payload: dp.ThreadMember) void,
+        onThreadMembersUpdate: *const fn (ptr: *anyopaque, payload: dp.ThreadMembersUpdatePayload) void,
+        onUserUpdate: *const fn (ptr: *anyopaque, payload: dp.UserUpdatePayload) void,
+        onChannelPinsUpdate: *const fn (ptr: *anyopaque, payload: dp.ChannelPinsUpdatePayload) void,
+        onGuildEmojisUpdate: *const fn (ptr: *anyopaque, payload: dp.GuildEmojisUpdatePayload) void,
+        onGuildStickersUpdate: *const fn (ptr: *anyopaque, payload: dp.GuildStickersUpdatePayload) void,
+        onGuildRoleUpdateBulk: *const fn (ptr: *anyopaque, payload: dp.GuildRoleUpdateBulkPayload) void,
+        onChannelUpdateBulk: *const fn (ptr: *anyopaque, payload: dp.ChannelUpdateBulkPayload) void,
         onRawGatewayPayload: *const fn (ptr: *anyopaque, payload: GatewayPayload) void,
         onRawREST: *const fn (ptr: *anyopaque, response: Response) void,
     };
@@ -167,6 +197,122 @@ pub const EventDispatcher = struct {
                 cache.removeMember(parsed.value.guild_id, parsed.value.user.id);
             }
             self.handler.vtable.onGuildMemberRemove(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_ADD")) {
+            const parsed = std.json.parseFromValue(dp.MessageReactionAddPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onMessageReactionAdd(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE")) {
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemovePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onMessageReactionRemove(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE_ALL")) {
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveAllPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onMessageReactionRemoveAll(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE_EMOJI")) {
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveEmojiPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onMessageReactionRemoveEmoji(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "MESSAGE_DELETE_BULK")) {
+            const parsed = std.json.parseFromValue(dp.MessageDeleteBulkPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onMessageDeleteBulk(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_ROLE_CREATE")) {
+            const parsed = std.json.parseFromValue(dp.GuildRoleCreatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildRoleCreate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_ROLE_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.GuildRoleUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildRoleUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_ROLE_DELETE")) {
+            const parsed = std.json.parseFromValue(dp.GuildRoleDeletePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildRoleDelete(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_BAN_ADD")) {
+            const parsed = std.json.parseFromValue(dp.GuildBanAddPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildBanAdd(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_BAN_REMOVE")) {
+            const parsed = std.json.parseFromValue(dp.GuildBanRemovePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildBanRemove(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "TYPING_START")) {
+            const parsed = std.json.parseFromValue(dp.TypingStartPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onTypingStart(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "WEBHOOKS_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.WebhooksUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onWebhooksUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "INVITE_CREATE")) {
+            const parsed = std.json.parseFromValue(dp.InviteCreatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onInviteCreate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "INVITE_DELETE")) {
+            const parsed = std.json.parseFromValue(dp.InviteDeletePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onInviteDelete(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "VOICE_STATE_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.VoiceStateUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onVoiceStateUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "VOICE_SERVER_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.VoiceServerUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onVoiceServerUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "PRESENCE_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.PresenceUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onPresenceUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_CREATE")) {
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadCreate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_UPDATE")) {
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_DELETE")) {
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadDelete(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_LIST_SYNC")) {
+            const parsed = std.json.parseFromValue(dp.ThreadListSyncPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadListSync(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_MEMBER_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.ThreadMember, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadMemberUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "THREAD_MEMBERS_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.ThreadMembersUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onThreadMembersUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "USER_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.UserUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onUserUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "CHANNEL_PINS_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.ChannelPinsUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onChannelPinsUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_EMOJIS_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.GuildEmojisUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildEmojisUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_STICKERS_UPDATE")) {
+            const parsed = std.json.parseFromValue(dp.GuildStickersUpdatePayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildStickersUpdate(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "GUILD_ROLE_UPDATE_BULK")) {
+            const parsed = std.json.parseFromValue(dp.GuildRoleUpdateBulkPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onGuildRoleUpdateBulk(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "CHANNEL_UPDATE_BULK")) {
+            const parsed = std.json.parseFromValue(dp.ChannelUpdateBulkPayload, self.allocator, data, .{}) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onChannelUpdateBulk(self.handler.ptr, parsed.value);
         }
     }
 
@@ -195,6 +341,35 @@ const MockHandler = struct {
         .onGuildMemberAdd = noopGuildMember,
         .onGuildMemberUpdate = noopGuildMember,
         .onGuildMemberRemove = noopGuildMemberRemove,
+        .onMessageReactionAdd = noopReactionAdd,
+        .onMessageReactionRemove = noopReactionRemove,
+        .onMessageReactionRemoveAll = noopReactionRemoveAll,
+        .onMessageReactionRemoveEmoji = noopReactionRemoveEmoji,
+        .onMessageDeleteBulk = noopMsgDeleteBulk,
+        .onGuildRoleCreate = noopRoleCreate,
+        .onGuildRoleUpdate = noopRoleUpdate,
+        .onGuildRoleDelete = noopRoleDelete,
+        .onGuildBanAdd = noopBanAdd,
+        .onGuildBanRemove = noopBanRemove,
+        .onTypingStart = noopTypingStart,
+        .onWebhooksUpdate = noopWebhooksUpdate,
+        .onInviteCreate = noopInviteCreate,
+        .onInviteDelete = noopInviteDelete,
+        .onVoiceStateUpdate = noopVoiceStateUpdate,
+        .onVoiceServerUpdate = noopVoiceServerUpdate,
+        .onPresenceUpdate = noopPresenceUpdate,
+        .onThreadCreate = noopThreadCreate,
+        .onThreadUpdate = noopThreadUpdate,
+        .onThreadDelete = noopThreadDelete,
+        .onThreadListSync = noopThreadListSync,
+        .onThreadMemberUpdate = noopThreadMemberUpdate,
+        .onThreadMembersUpdate = noopThreadMembersUpdate,
+        .onUserUpdate = noopUserUpdate,
+        .onChannelPinsUpdate = noopPinsUpdate,
+        .onGuildEmojisUpdate = noopEmojisUpdate,
+        .onGuildStickersUpdate = noopStickersUpdate,
+        .onGuildRoleUpdateBulk = noopRoleUpdateBulk,
+        .onChannelUpdateBulk = noopChannelUpdateBulk,
         .onRawGatewayPayload = onRawGatewayPayload,
         .onRawREST = onRawREST,
     };
@@ -262,6 +437,36 @@ const MockHandler = struct {
         _ = ptr;
         _ = payload;
     }
+
+    fn noopReactionAdd(ptr: *anyopaque, payload: dp.MessageReactionAddPayload) void { _ = ptr; _ = payload; }
+    fn noopReactionRemove(ptr: *anyopaque, payload: dp.MessageReactionRemovePayload) void { _ = ptr; _ = payload; }
+    fn noopReactionRemoveAll(ptr: *anyopaque, payload: dp.MessageReactionRemoveAllPayload) void { _ = ptr; _ = payload; }
+    fn noopReactionRemoveEmoji(ptr: *anyopaque, payload: dp.MessageReactionRemoveEmojiPayload) void { _ = ptr; _ = payload; }
+    fn noopMsgDeleteBulk(ptr: *anyopaque, payload: dp.MessageDeleteBulkPayload) void { _ = ptr; _ = payload; }
+    fn noopRoleCreate(ptr: *anyopaque, payload: dp.GuildRoleCreatePayload) void { _ = ptr; _ = payload; }
+    fn noopRoleUpdate(ptr: *anyopaque, payload: dp.GuildRoleUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopRoleDelete(ptr: *anyopaque, payload: dp.GuildRoleDeletePayload) void { _ = ptr; _ = payload; }
+    fn noopBanAdd(ptr: *anyopaque, payload: dp.GuildBanAddPayload) void { _ = ptr; _ = payload; }
+    fn noopBanRemove(ptr: *anyopaque, payload: dp.GuildBanRemovePayload) void { _ = ptr; _ = payload; }
+    fn noopTypingStart(ptr: *anyopaque, payload: dp.TypingStartPayload) void { _ = ptr; _ = payload; }
+    fn noopWebhooksUpdate(ptr: *anyopaque, payload: dp.WebhooksUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopInviteCreate(ptr: *anyopaque, payload: dp.InviteCreatePayload) void { _ = ptr; _ = payload; }
+    fn noopInviteDelete(ptr: *anyopaque, payload: dp.InviteDeletePayload) void { _ = ptr; _ = payload; }
+    fn noopVoiceStateUpdate(ptr: *anyopaque, payload: dp.VoiceStateUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopVoiceServerUpdate(ptr: *anyopaque, payload: dp.VoiceServerUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopPresenceUpdate(ptr: *anyopaque, payload: dp.PresenceUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopThreadCreate(ptr: *anyopaque, payload: Channel) void { _ = ptr; _ = payload; }
+    fn noopThreadUpdate(ptr: *anyopaque, payload: Channel) void { _ = ptr; _ = payload; }
+    fn noopThreadDelete(ptr: *anyopaque, payload: Channel) void { _ = ptr; _ = payload; }
+    fn noopThreadListSync(ptr: *anyopaque, payload: dp.ThreadListSyncPayload) void { _ = ptr; _ = payload; }
+    fn noopThreadMemberUpdate(ptr: *anyopaque, payload: dp.ThreadMember) void { _ = ptr; _ = payload; }
+    fn noopThreadMembersUpdate(ptr: *anyopaque, payload: dp.ThreadMembersUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopUserUpdate(ptr: *anyopaque, payload: dp.UserUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopPinsUpdate(ptr: *anyopaque, payload: dp.ChannelPinsUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopEmojisUpdate(ptr: *anyopaque, payload: dp.GuildEmojisUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopStickersUpdate(ptr: *anyopaque, payload: dp.GuildStickersUpdatePayload) void { _ = ptr; _ = payload; }
+    fn noopRoleUpdateBulk(ptr: *anyopaque, payload: dp.GuildRoleUpdateBulkPayload) void { _ = ptr; _ = payload; }
+    fn noopChannelUpdateBulk(ptr: *anyopaque, payload: dp.ChannelUpdateBulkPayload) void { _ = ptr; _ = payload; }
 };
 
 test "EventDispatcher dispatches READY" {

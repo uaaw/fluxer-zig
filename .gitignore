@@ -5,3 +5,4 @@ fluxer/
 research/
 build/
 docgen_tmp/
+.claude/

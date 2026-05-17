@@ -50,3 +50,7 @@ pub const Sticker = @import("guild.zig").Sticker;
 pub const GuildMember = @import("guild_member.zig").GuildMember;
 /// Fluxer permissions packed struct.
 pub const Permissions = @import("permissions.zig").Permissions;
+/// Fluxer voice state object.
+pub const VoiceState = @import("voice_state.zig").VoiceState;
+/// Fluxer invite object.
+pub const Invite = @import("invite.zig").Invite;
