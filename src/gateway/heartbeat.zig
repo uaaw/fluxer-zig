@@ -12,12 +12,14 @@ pub const Heartbeat = struct {
     interval_ms: u64,
     last_sent_ms: ?i64,
     last_ack_ms: ?i64,
+    last_ack: bool,
 
     pub fn init(interval_ms: u64) Heartbeat {
         return .{
             .interval_ms = interval_ms,
             .last_sent_ms = null,
             .last_ack_ms = null,
+            .last_ack = true,
         };
     }
 
@@ -35,11 +37,14 @@ pub const Heartbeat = struct {
 
     pub fn markSent(self: *Heartbeat, now_ms: i64) void {
         self.last_sent_ms = now_ms;
+        self.last_ack = false;
     }
 
     pub fn markAck(self: *Heartbeat, now_ms: i64) void {
         self.last_ack_ms = now_ms;
+        self.last_ack = true;
     }
+
 };
 
 test "default interval is 41250ms" {
@@ -71,4 +76,13 @@ test "heartbeat timeout detection" {
     hb.markAck(0);
     try std.testing.expect(!hb.isTimedOut(44999));
     try std.testing.expect(hb.isTimedOut(45001));
+}
+
+test "heartbeat markAck sets last_ack flag" {
+    var hb = Heartbeat.init(41250);
+    try std.testing.expect(hb.last_ack);
+    hb.markSent(0);
+    try std.testing.expect(!hb.last_ack);
+    hb.markAck(1000);
+    try std.testing.expect(hb.last_ack);
 }

@@ -12,4 +12,4 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- feat gateway add TLS support for wss:// connections
+- fix gateway implement proper Gateway protocol flow

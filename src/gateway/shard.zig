@@ -62,6 +62,7 @@ pub const Shard = struct {
     stream: ?std.net.Stream,
     tls_client: ?std.crypto.tls.Client,
     receive_thread: ?std.Thread,
+    heartbeat_thread: ?std.Thread,
     running: std.atomic.Value(bool),
     receive_mutex: std.Thread.Mutex,
 
@@ -97,6 +98,7 @@ pub const Shard = struct {
             .stream = null,
             .tls_client = null,
             .receive_thread = null,
+            .heartbeat_thread = null,
             .running = std.atomic.Value(bool).init(false),
             .receive_mutex = .{},
         };
@@ -116,8 +118,27 @@ pub const Shard = struct {
     pub fn handlePayload(self: *Shard, op: payload.GatewayOpcode, data: ?std.json.Value) !void {
         switch (op) {
             .hello => {
-                // Server sent hello with heartbeat interval.
                 self.status = .identifying;
+
+                var extracted_interval: u64 = heartbeat_interval_ms;
+                if (data) |d| {
+                    if (d.object.get("heartbeat_interval")) |hi| {
+                        if (hi == .integer) {
+                            extracted_interval = @intCast(hi.integer);
+                        }
+                    }
+                }
+                self.hb.interval_ms = extracted_interval;
+
+                if (self.session_id != null and self.sequence != null) {
+                    const resume_body = try self.sendResume();
+                    try self.sendPayloadBody(.resume_session, resume_body);
+                } else {
+                    const identify_body = self.sendIdentify();
+                    try self.sendPayloadBody(.identify, identify_body);
+                }
+
+                self.startHeartbeat();
             },
             .heartbeat_ack => {
                 // Server acknowledged our heartbeat.
@@ -286,7 +307,7 @@ pub const Shard = struct {
 
         self.stream = stream;
         self.tls_client = tls_client;
-        self.status = .identifying;
+        self.status = .connecting;
         self.running.store(true, .monotonic);
         self.receive_thread = std.Thread.spawn(.{}, Shard.receiveLoop, .{self}) catch |err| {
             stream.close();
@@ -302,6 +323,11 @@ pub const Shard = struct {
     /// Disconnects from the gateway and cleans up resources.
     pub fn disconnect(self: *Shard) void {
         self.running.store(false, .monotonic);
+
+        if (self.heartbeat_thread) |t| {
+            t.join();
+            self.heartbeat_thread = null;
+        }
 
         self.receive_mutex.lock();
         if (self.stream) |s| {
@@ -352,6 +378,65 @@ pub const Shard = struct {
         } else {
             return error.NotConnected;
         }
+    }
+
+    /// Sends a GatewayPayload over the WebSocket connection.
+    pub fn sendPayload(self: *Shard, gp: payload.GatewayPayload) !void {
+        var json_str = std.ArrayList(u8).init(self.allocator);
+        defer json_str.deinit();
+        try std.json.stringify(gp, .{}, json_str.writer());
+        try self.sendRaw(json_str.items);
+    }
+
+    /// Sends a gateway payload with a typed body struct serialized as JSON.
+    /// Builds a JSON string shaped like GatewayPayload without allocating a std.json.Value tree.
+    pub fn sendPayloadBody(self: *Shard, op: payload.GatewayOpcode, body: anytype) !void {
+        var buf = std.ArrayList(u8).init(self.allocator);
+        defer buf.deinit();
+        var writer = buf.writer();
+        try writer.print("{{\"op\":{d},\"d\":", .{@intFromEnum(op)});
+        try std.json.stringify(body, .{}, writer);
+        try writer.writeAll("}");
+        try self.sendRaw(buf.items);
+    }
+
+    /// Heartbeat loop. Runs in a dedicated thread.
+    pub fn heartbeatLoop(self: *Shard) void {
+        const jitter = std.crypto.random.uintLessThan(u64, self.hb.interval_ms);
+        std.time.sleep(jitter * std.time.ns_per_ms);
+
+        while (self.running.load(.monotonic)) {
+            if (!self.hb.last_ack) {
+                self.status = .resuming;
+                self.running.store(false, .monotonic);
+                break;
+            }
+
+            self.hb.last_ack = false;
+            const hb_payload = payload.GatewayPayload{
+                .op = .heartbeat,
+                .d = if (self.sequence) |seq| std.json.Value{ .integer = @intCast(seq) } else std.json.Value{ .null = {} },
+            };
+            self.sendPayload(hb_payload) catch |err| {
+                switch (err) {
+                    error.NotConnected => return,
+                    else => {
+                        if (!builtin.is_test) std.log.err("Failed to send heartbeat: {s}", .{@errorName(err)});
+                    },
+                }
+            };
+            self.hb.markSent(std.time.milliTimestamp());
+
+            std.time.sleep(self.hb.interval_ms * std.time.ns_per_ms);
+        }
+    }
+
+    fn startHeartbeat(self: *Shard) void {
+        if (builtin.is_test) return;
+        if (self.heartbeat_thread != null) return;
+        self.heartbeat_thread = std.Thread.spawn(.{}, Shard.heartbeatLoop, .{self}) catch |err| {
+            std.log.err("failed to spawn heartbeat thread: {s}", .{@errorName(err)});
+        };
     }
 
     /// WebSocket receive loop. Runs in a dedicated thread.
@@ -476,6 +561,7 @@ pub const Shard = struct {
                         }
                     }
                 }
+                self.status = .ready;
             }
         }
 
@@ -648,4 +734,52 @@ test "shard sendResume missing session" {
     var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
     const result = shard.sendResume();
     try std.testing.expectError(error.NoSessionId, result);
+}
+
+test "shard handlePayload hello attempts identify when disconnected" {
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    const result = shard.handlePayload(.hello, null);
+    try std.testing.expectError(error.NotConnected, result);
+    shard.disconnect();
+}
+
+test "shard handlePayload hello attempts resume with session" {
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    shard.session_id = try std.testing.allocator.dupe(u8, "sess_123");
+    shard.sequence = 42;
+    const result = shard.handlePayload(.hello, null);
+    try std.testing.expectError(error.NotConnected, result);
+    shard.disconnect();
+    if (shard.session_id) |sid| std.testing.allocator.free(sid);
+    shard.session_id = null;
+}
+
+test "shard sendPayload when disconnected" {
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    const gp = payload.GatewayPayload{ .op = .heartbeat };
+    const result = shard.sendPayload(gp);
+    try std.testing.expectError(error.NotConnected, result);
+}
+
+test "shard sendPayloadBody when disconnected" {
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    const body = payload.IdentifyBody{
+        .token = "test_token",
+        .properties = .{ .os = "linux", .browser = "test", .device = "test" },
+        .intents = 0,
+    };
+    const result = shard.sendPayloadBody(.identify, body);
+    try std.testing.expectError(error.NotConnected, result);
+}
+
+test "shard handleFramePayload sets ready on READY" {
+    const json =
+        \\{"op":0,"t":"READY","d":{"v":1,"user":{"id":"123456789012345678","username":"testbot","discriminator":null,"bot":true},"session_id":"abc123","guilds":[]}}
+    ;
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    try shard.handleFramePayload(json);
+    try std.testing.expectEqual(ShardStatus.ready, shard.status);
+    try std.testing.expectEqualStrings("abc123", shard.session_id.?);
+    if (shard.session_id) |sid| std.testing.allocator.free(sid);
+    shard.session_id = null;
 }
