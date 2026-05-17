@@ -12,4 +12,4 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- fix gateway implement proper Gateway protocol flow
+- fix gateway resolve TLS client copy causing silent disconnect

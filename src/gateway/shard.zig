@@ -6,9 +6,10 @@ const websocket = @import("../websocket/mod.zig");
 const errors = @import("errors.zig");
 
 /// TLS stream wrapper that adapts `std.crypto.tls.Client` to the `AnyReader`/`AnyWriter` interface.
+/// Holds a pointer to the TLS client so that read/write sequence numbers stay synchronized.
 const TLSStream = struct {
     tcp: std.net.Stream,
-    client: std.crypto.tls.Client,
+    client: *std.crypto.tls.Client,
 
     pub fn read(self: *TLSStream, buffer: []u8) !usize {
         return self.client.read(self.tcp, buffer);
@@ -116,6 +117,9 @@ pub const Shard = struct {
     /// Processes an incoming gateway payload.
     /// Handles fluxer-specific opcodes such as `GatewayError`.
     pub fn handlePayload(self: *Shard, op: payload.GatewayOpcode, data: ?std.json.Value) !void {
+        if (!builtin.is_test) {
+            std.log.debug("handlePayload received op={s}", .{@tagName(op)});
+        }
         switch (op) {
             .hello => {
                 self.status = .identifying;
@@ -131,11 +135,22 @@ pub const Shard = struct {
                 self.hb.interval_ms = extracted_interval;
 
                 if (self.session_id != null and self.sequence != null) {
-                    const resume_body = try self.sendResume();
-                    try self.sendPayloadBody(.resume_session, resume_body);
+                    if (self.sendResume()) |resume_body| {
+                        self.sendPayloadBody(.resume_session, resume_body) catch |err| {
+                            if (!builtin.is_test) std.log.err("sendPayloadBody resume failed: {s}", .{@errorName(err)});
+                        };
+                    } else |err| {
+                        if (!builtin.is_test) std.log.warn("sendResume failed, falling back to identify: {s}", .{@errorName(err)});
+                        const identify_body = self.sendIdentify();
+                        self.sendPayloadBody(.identify, identify_body) catch |spb_err| {
+                            if (!builtin.is_test) std.log.err("sendPayloadBody identify failed: {s}", .{@errorName(spb_err)});
+                        };
+                    }
                 } else {
                     const identify_body = self.sendIdentify();
-                    try self.sendPayloadBody(.identify, identify_body);
+                    self.sendPayloadBody(.identify, identify_body) catch |err| {
+                        if (!builtin.is_test) std.log.err("sendPayloadBody identify failed: {s}", .{@errorName(err)});
+                    };
                 }
 
                 self.startHeartbeat();
@@ -351,7 +366,7 @@ pub const Shard = struct {
 
     fn sendCloseFrameNoLock(self: *Shard) !void {
         if (self.stream) |s| {
-            if (self.tls_client) |tls| {
+            if (self.tls_client) |*tls| {
                 var tls_stream = TLSStream{ .tcp = s, .client = tls };
                 const writer = tls_stream.writer();
                 try websocket.serializeClose(writer.any(), @intFromEnum(errors.CloseCode.normal), null);
@@ -367,7 +382,7 @@ pub const Shard = struct {
         self.receive_mutex.lock();
         defer self.receive_mutex.unlock();
         if (self.stream) |s| {
-            if (self.tls_client) |tls| {
+            if (self.tls_client) |*tls| {
                 var tls_stream = TLSStream{ .tcp = s, .client = tls };
                 const writer = tls_stream.writer();
                 try websocket.serializeText(writer.any(), text);
@@ -397,6 +412,9 @@ pub const Shard = struct {
         try writer.print("{{\"op\":{d},\"d\":", .{@intFromEnum(op)});
         try std.json.stringify(body, .{}, writer);
         try writer.writeAll("}");
+        if (!builtin.is_test) {
+            std.log.debug("sendPayloadBody op={s} json={s}", .{ @tagName(op), buf.items });
+        }
         try self.sendRaw(buf.items);
     }
 
@@ -444,7 +462,7 @@ pub const Shard = struct {
     pub fn receiveLoop(self: *Shard) void {
         self.receive_mutex.lock();
         const stream_opt = self.stream;
-        const tls_client_opt = self.tls_client;
+        const tls_client_ptr: ?*std.crypto.tls.Client = if (self.tls_client) |*tls| tls else null;
         self.receive_mutex.unlock();
 
         const stream = stream_opt orelse {
@@ -453,9 +471,13 @@ pub const Shard = struct {
         };
 
         var buffer: [4096]u8 = undefined;
-        var tls_stream: ?TLSStream = if (tls_client_opt) |tls| TLSStream{ .tcp = stream, .client = tls } else null;
+        var tls_stream: ?TLSStream = if (tls_client_ptr) |ptr| TLSStream{ .tcp = stream, .client = ptr } else null;
         while (self.running.load(.monotonic)) {
             const reader = if (tls_stream) |*ts| ts.reader().any() else stream.reader().any();
+
+            if (!builtin.is_test) {
+                std.log.debug("receiveLoop waiting for frame...", .{});
+            }
 
             var frame = websocket.parseFrame(reader, self.allocator, &buffer) catch |err| {
                 self.status = .resuming;
@@ -476,6 +498,10 @@ pub const Shard = struct {
             };
             defer frame.deinit();
 
+            if (!builtin.is_test) {
+                std.log.debug("receiveLoop received frame opcode={s} payload_len={d}", .{@tagName(frame.opcode), frame.payload.len});
+            }
+
             switch (frame.opcode) {
                 .text => {
                     self.handleFramePayload(frame.payload) catch |err| {
@@ -487,7 +513,7 @@ pub const Shard = struct {
                 .ping => {
                     self.receive_mutex.lock();
                     if (self.stream) |s| {
-                        if (self.tls_client) |tls| {
+                        if (self.tls_client) |*tls| {
                             var ping_tls_stream = TLSStream{ .tcp = s, .client = tls };
                             const writer = ping_tls_stream.writer();
                             websocket.serializeFrame(writer.any(), .pong, frame.payload) catch {};
@@ -513,7 +539,7 @@ pub const Shard = struct {
                     self.receive_mutex.lock();
                     defer self.receive_mutex.unlock();
                     if (self.stream) |s| {
-                        if (self.tls_client) |tls| {
+                        if (self.tls_client) |*tls| {
                             var close_tls_stream = TLSStream{ .tcp = s, .client = tls };
                             const writer = close_tls_stream.writer();
                             const code_to_echo = close_code orelse @intFromEnum(errors.CloseCode.normal);
@@ -569,7 +595,11 @@ pub const Shard = struct {
             cb(self, parsed.value);
         }
 
-        try self.handlePayload(parsed.value.op, parsed.value.d);
+        self.handlePayload(parsed.value.op, parsed.value.d) catch |err| {
+            if (!builtin.is_test) {
+                std.log.err("handlePayload error for op={s}: {s}", .{ @tagName(parsed.value.op), @errorName(err) });
+            }
+        };
     }
 
     /// Processes a close code from the server and decides whether to reconnect.
@@ -738,8 +768,9 @@ test "shard sendResume missing session" {
 
 test "shard handlePayload hello attempts identify when disconnected" {
     var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
-    const result = shard.handlePayload(.hello, null);
-    try std.testing.expectError(error.NotConnected, result);
+    // handlePayload(.hello) now catches send errors so that startHeartbeat is always invoked.
+    try shard.handlePayload(.hello, null);
+    try std.testing.expectEqual(ShardStatus.identifying, shard.status);
     shard.disconnect();
 }
 
@@ -747,8 +778,9 @@ test "shard handlePayload hello attempts resume with session" {
     var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
     shard.session_id = try std.testing.allocator.dupe(u8, "sess_123");
     shard.sequence = 42;
-    const result = shard.handlePayload(.hello, null);
-    try std.testing.expectError(error.NotConnected, result);
+    // handlePayload(.hello) catches send errors and falls back to identify if resume fails.
+    try shard.handlePayload(.hello, null);
+    try std.testing.expectEqual(ShardStatus.identifying, shard.status);
     shard.disconnect();
     if (shard.session_id) |sid| std.testing.allocator.free(sid);
     shard.session_id = null;
@@ -782,4 +814,136 @@ test "shard handleFramePayload sets ready on READY" {
     try std.testing.expectEqualStrings("abc123", shard.session_id.?);
     if (shard.session_id) |sid| std.testing.allocator.free(sid);
     shard.session_id = null;
+}
+
+var dispatch_called: bool = false;
+var dispatch_payload: ?payload.GatewayPayload = null;
+
+fn testDispatchCallback(shard: *Shard, gp: payload.GatewayPayload) void {
+    _ = shard;
+    dispatch_called = true;
+    dispatch_payload = gp;
+}
+
+test "shard full gateway flow" {
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    shard.on_dispatch = testDispatchCallback;
+    dispatch_called = false;
+    dispatch_payload = null;
+
+    // 1. Simulate receiving HELLO
+    const hello_json =
+        \\{"op":10,"d":{"heartbeat_interval":41250}}
+    ;
+    // handleFramePayload parses JSON and calls handlePayload(.hello)
+    // In test mode, sendPayloadBody returns error.NotConnected because
+    // there is no active WebSocket stream. The error is caught inside
+    // handleFramePayload, so the call itself succeeds.
+    try shard.handleFramePayload(hello_json);
+    try std.testing.expectEqual(ShardStatus.identifying, shard.status);
+
+    // 2. Simulate receiving READY
+    const ready_json =
+        \\{"op":0,"t":"READY","d":{"v":1,"user":{"id":"123456789012345678","username":"testbot","discriminator":null,"bot":true},"session_id":"abc123","guilds":[]}}
+    ;
+    try shard.handleFramePayload(ready_json);
+    try std.testing.expectEqual(ShardStatus.ready, shard.status);
+    try std.testing.expectEqualStrings("abc123", shard.session_id.?);
+
+    // 3. on_dispatch should have been called for both HELLO and READY frames.
+    // Even though handlePayload(.hello) failed with NotConnected, on_dispatch
+    // fires before handlePayload, so the callback was invoked.
+    try std.testing.expect(dispatch_called);
+    try std.testing.expect(dispatch_payload != null);
+
+    if (shard.session_id) |sid| std.testing.allocator.free(sid);
+    shard.session_id = null;
+}
+
+test "shard receiveLoop parses text frame" {
+    var fds: [2]i32 = undefined;
+    const rc = std.os.linux.socketpair(std.os.linux.AF.UNIX, std.os.linux.SOCK.STREAM, 0, &fds);
+    try std.testing.expectEqual(@as(usize, 0), rc);
+    defer {
+        _ = std.os.linux.close(fds[0]);
+        _ = std.os.linux.close(fds[1]);
+    }
+
+    const read_stream = std.net.Stream{ .handle = fds[0] };
+    const write_stream = std.net.Stream{ .handle = fds[1] };
+
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    shard.on_dispatch = testDispatchCallback;
+    dispatch_called = false;
+    dispatch_payload = null;
+
+    shard.stream = read_stream;
+    shard.running.store(true, .monotonic);
+
+    // Write a WebSocket text frame with a simple JSON payload
+    const json_payload =
+        \\{"op":0,"t":"MESSAGE_CREATE","d":{"id":"1","channel_id":"2","author":{"id":"3","username":"test"},"content":"hello","timestamp":"2024-01-01T00:00:00.000Z","tts":false,"mention_everyone":false,"mentions":[],"mention_roles":[],"attachments":[],"embeds":[],"pinned":false,"type":0}}
+    ;
+    var frame_buf: [1024]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&frame_buf);
+    try websocket.serializeText(fbs.writer().any(), json_payload);
+    const frame_bytes = fbs.getWritten();
+
+    const writer = write_stream.writer();
+    try writer.writeAll(frame_bytes);
+    _ = std.os.linux.shutdown(fds[1], 1); // SHUT_WR
+
+    // Run receiveLoop synchronously (it will read the frame and then hit EOF)
+    shard.receiveLoop();
+
+    try std.testing.expect(dispatch_called);
+    try std.testing.expect(dispatch_payload != null);
+    try std.testing.expectEqual(ShardStatus.disconnected, shard.status);
+
+    // shard.receiveLoop already closed fds[0] and set stream to null
+    shard.stream = null;
+}
+
+test "shard handlePayload hello sends identify when connected" {
+    var fds: [2]i32 = undefined;
+    const rc = std.os.linux.socketpair(std.os.linux.AF.UNIX, std.os.linux.SOCK.STREAM, 0, &fds);
+    try std.testing.expectEqual(@as(usize, 0), rc);
+    defer {
+        _ = std.os.linux.close(fds[0]);
+        _ = std.os.linux.close(fds[1]);
+    }
+
+    const read_stream = std.net.Stream{ .handle = fds[0] };
+    const write_stream = std.net.Stream{ .handle = fds[1] };
+
+    var shard = Shard.init(std.testing.allocator, 0, 1, "test_token");
+    shard.stream = read_stream;
+    shard.status = .connecting;
+
+    // Simulate receiving HELLO
+    try shard.handlePayload(.hello, null);
+    try std.testing.expectEqual(ShardStatus.identifying, shard.status);
+
+    // Read the WebSocket frame from the socket
+    var buf: [4096]u8 = undefined;
+    const n = try write_stream.reader().read(&buf);
+    try std.testing.expect(n > 0);
+
+    // Parse the WebSocket frame to unmask the payload
+    var fbs = std.io.fixedBufferStream(buf[0..n]);
+    var frame_buffer: [4096]u8 = undefined;
+    var frame = try websocket.parseFrame(fbs.reader().any(), std.testing.allocator, &frame_buffer);
+    defer frame.deinit();
+
+    try std.testing.expect(frame.fin);
+    try std.testing.expectEqual(websocket.Opcode.text, frame.opcode);
+
+    // Verify the unmasked payload contains identify JSON
+    const json_start = std.mem.indexOf(u8, frame.payload, "{\"op\":2") orelse {
+        std.debug.print("unmasked payload: {s}\n", .{frame.payload});
+        return error.IdentifyNotFound;
+    };
+    try std.testing.expect(json_start < frame.payload.len);
+
+    shard.stream = null; // Prevent disconnect from closing fds[0] again
 }
