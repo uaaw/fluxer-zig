@@ -184,6 +184,10 @@ defer sm.stopAll();
 > このライブラリは初期開発段階です。バージョン間でAPIが変更される可能性があります。
 > 変更履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
+## 既知の制限事項
+
+- **Gateway接続のTLS（wss://）は未対応です。** 現在の `Shard.connect()` は平文TCP（ポート443）を使用しており、TLS必須のエンドポイントでは拒否されます。今後のリリースで `std.crypto.tls.Client` または外部TLSライブラリを使用したTLS対応を予定しています。
+
 ## 貢献方法
 
 バグ報告、機能提案、Pull Requestを歓迎します。詳細は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。

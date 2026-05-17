@@ -160,10 +160,14 @@ pub const Shard = struct {
         const host = url[host_start..path_start];
         const path = url[path_start..];
 
-        // TCP connect. TLS will be added with std.crypto.tls.Client in the future.
+        // TCP connect. Note: TLS is not yet fully implemented.
+        // For wss://, we currently attempt plain TCP which will fail on TLS-only endpoints.
         const stream = std.net.tcpConnectToHost(self.allocator, host, 443) catch |err| {
             self.status = .disconnected;
-            return err;
+            if (!builtin.is_test) {
+                std.log.err("Failed to connect to {s}: {s}. NOTE: TLS transport for wss:// is not yet fully implemented. Plain TCP on port 443 may be rejected by TLS-only endpoints.", .{ host, @errorName(err) });
+            }
+            return error.TLSTransportNotImplemented;
         };
 
         // Build HTTP upgrade request

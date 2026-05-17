@@ -844,6 +844,9 @@ pub const Shard = struct {
     pub fn init(allocator: std.mem.Allocator, id: u16, total_shards: u16, token: []const u8) Shard;
     pub fn deinit(self: *Shard) void;
 
+    /// ゲートウェイへの接続を開始します。
+    /// **制限事項:** TLS（wss://）は未対応です。平文TCP（ポート443）を使用しており、
+    /// TLS必須のエンドポイントでは拒否されます。失敗時は `error.TLSTransportNotImplemented` を返します。
     pub fn connect(self: *Shard) !void;
     pub fn disconnect(self: *Shard) void;
     pub fn sendRaw(self: *Shard, text: []const u8) !void;

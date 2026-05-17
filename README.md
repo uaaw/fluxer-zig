@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A low-level Zig library for building [fluxer](https://fluxer.app) chat applications and bots.
-Inspired by[eris](https://github.com/abalabahaha/eris),
+Inspired by [eris](https://github.com/abalabahaha/eris),
 fluxer-zig provides both high-level convenience and low-level control over the Fluxer API.
 
 ## Features
@@ -171,6 +171,10 @@ defer sm.stopAll();
 >
 > This library is in early development. The API may change between versions.
 > See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Known Limitations
+
+- **Gateway TLS (wss://) is not yet fully implemented.** The current `Shard.connect()` uses plain TCP on port 443, which will be rejected by TLS-only endpoints. A future release will add TLS support via `std.crypto.tls.Client` or an external TLS library.
 
 ## Contributing
 

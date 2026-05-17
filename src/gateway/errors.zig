@@ -10,6 +10,7 @@ pub const GatewayError = error{
     InvalidWebSocketAccept,
     MissingWebSocketAccept,
     InvalidOpcode,
+    TLSTransportNotImplemented,
 };
 
 /// Represents a gateway close code.
@@ -50,4 +51,9 @@ test "GatewayError error set" {
 test "CloseCode enum values" {
     try std.testing.expectEqual(@as(u16, 1000), @intFromEnum(CloseCode.normal));
     try std.testing.expectEqual(@as(u16, 4004), @intFromEnum(CloseCode.authentication_failed));
+}
+
+test "GatewayError includes TLSTransportNotImplemented" {
+    const err: GatewayError = error.TLSTransportNotImplemented;
+    try std.testing.expect(err == error.TLSTransportNotImplemented);
 }
