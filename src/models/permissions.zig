@@ -131,7 +131,7 @@ test "permissions has add remove" {
 test "permissions json" {
     const allocator = std.testing.allocator;
     const json = "\"104324673\"";
-    const parsed = try std.json.parseFromSlice(Permissions, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Permissions, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expect(parsed.value.has("CreateInstantInvite"));
     try std.testing.expect(parsed.value.has("ViewChannel"));

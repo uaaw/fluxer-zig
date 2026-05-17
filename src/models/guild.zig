@@ -175,7 +175,7 @@ test "guild json" {
         \\  "premium_progress_bar_enabled": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("Test Guild", parsed.value.name);
     try std.testing.expectEqualStrings("en-US", parsed.value.preferred_locale);
@@ -218,7 +218,7 @@ test "guild json with channels and members" {
         \\  ]
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(usize, 1), parsed.value.channels.?.len);
     try std.testing.expectEqualStrings("general", parsed.value.channels.?[0].name.?);
@@ -251,7 +251,7 @@ test "guild json with fluxer-specific fields" {
         \\  "splash_card_alignment": 2
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("Test Guild", parsed.value.name);
     try std.testing.expectEqual(@as(usize, 2), parsed.value.features.len);

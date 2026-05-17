@@ -571,7 +571,7 @@ pub const Shard = struct {
     }
 
     fn handleFramePayload(self: *Shard, payload_data: []const u8) !void {
-        var parsed = try std.json.parseFromSlice(payload.GatewayPayload, self.allocator, payload_data, .{});
+        var parsed = try std.json.parseFromSlice(payload.GatewayPayload, self.allocator, payload_data, .{ .ignore_unknown_fields = true });
         defer parsed.deinit();
 
         if (parsed.value.s) |seq| {

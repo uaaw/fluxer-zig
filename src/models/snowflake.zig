@@ -117,7 +117,7 @@ test "snowflake parse and format" {
 test "snowflake json" {
     const allocator = std.testing.allocator;
     const json = "\"175928847299117063\"";
-    const parsed = try std.json.parseFromSlice(Snowflake, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Snowflake, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 175928847299117063), parsed.value.toU64());
 

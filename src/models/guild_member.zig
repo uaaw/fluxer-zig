@@ -40,7 +40,7 @@ test "guild member json" {
         \\  "mute": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("testuser", parsed.value.user.?.username);
     try std.testing.expectEqualStrings("TestNick", parsed.value.nick.?);
@@ -67,7 +67,7 @@ test "guild member json with fluxer-specific fields" {
         \\  "hoist_position": 3
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 1), parsed.value.profile_flags.?);
     try std.testing.expectEqual(@as(u32, 3), parsed.value.hoist_position.?);
@@ -90,7 +90,7 @@ test "guild member json with guild_id" {
         \\  "mute": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 987654321098765432), parsed.value.guild_id.?.toU64());
     try std.testing.expectEqualStrings("testuser", parsed.value.user.?.username);

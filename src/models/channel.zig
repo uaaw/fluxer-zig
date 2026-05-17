@@ -70,7 +70,7 @@ test "channel json" {
         \\  "name": "general"
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(ChannelType.GuildText, parsed.value.type);
     try std.testing.expectEqualStrings("general", parsed.value.name.?);
@@ -94,7 +94,7 @@ test "channel json with permission overwrites" {
         \\  ]
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(usize, 1), parsed.value.permission_overwrites.?.len);
     try std.testing.expectEqual(PermissionOverwriteType.Role, parsed.value.permission_overwrites.?[0].type);
@@ -112,7 +112,7 @@ test "channel json link type" {
         \\  "url": "https://example.com"
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(ChannelType.Link, parsed.value.type);
     try std.testing.expectEqualStrings("external-link", parsed.value.name.?);

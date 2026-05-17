@@ -47,7 +47,7 @@ test "user json with discriminator" {
         \\  "bot": true
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(User, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(User, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 123456789012345678), parsed.value.id.toU64());
     try std.testing.expectEqualStrings("testuser", parsed.value.username);
@@ -67,7 +67,7 @@ test "user json without discriminator" {
         \\  "bot": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(User, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(User, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 123456789012345678), parsed.value.id.toU64());
     try std.testing.expectEqualStrings("testuser", parsed.value.username);
@@ -93,7 +93,7 @@ test "user json with fluxer-specific fields" {
         \\  "premium_lifetime_sequence": 42
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(User, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(User, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("fluxeruser", parsed.value.username);
     try std.testing.expectEqualStrings("they/them", parsed.value.pronouns.?);

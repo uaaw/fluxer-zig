@@ -26,7 +26,7 @@ test "ready payload json" {
         \\  "guilds": []
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(ReadyPayload, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(ReadyPayload, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u8, 1), parsed.value.v);
     try std.testing.expectEqualStrings("testbot", parsed.value.user.username);

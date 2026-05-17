@@ -11,7 +11,7 @@ pub const Response = struct {
     /// Allocates memory. Caller owns returned memory.
     /// Deserializes the response body as JSON into type T.
     pub fn json(self: Response, comptime T: type) !T {
-        const parsed = try std.json.parseFromSlice(T, self.allocator, self.body, .{});
+        const parsed = try std.json.parseFromSlice(T, self.allocator, self.body, .{ .ignore_unknown_fields = true });
         defer parsed.deinit();
         return parsed.value;
     }

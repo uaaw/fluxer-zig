@@ -164,7 +164,7 @@ test "message json" {
         \\  "type": 0
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("hello", parsed.value.content);
     try std.testing.expectEqual(MessageType.Default, parsed.value.type);
@@ -214,7 +214,7 @@ test "message json with fluxer-specific fields" {
         \\  }
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("hello with call and snapshot", parsed.value.content);
     try std.testing.expectEqual(@as(u64, 143360), parsed.value.flags.?);

@@ -151,7 +151,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn modifyChannel(self: *Client, id: Snowflake, data: anytype) !std.json.Parsed(Channel) {
@@ -161,7 +161,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.patch(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn deleteChannel(self: *Client, id: Snowflake) !std.json.Parsed(Channel) {
@@ -169,7 +169,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.delete(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     fn channelMessagesPath(allocator: std.mem.Allocator, id: Snowflake, query: ?[]const u8) ![]const u8 {
@@ -184,7 +184,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]Message, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]Message, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     fn channelMessagePath(
@@ -200,7 +200,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn createMessage(self: *Client, channel_id: Snowflake, content: []const u8) !std.json.Parsed(Message) {
@@ -210,7 +210,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.post(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn editMessage(self: *Client, channel_id: Snowflake, message_id: Snowflake, content: []const u8) !std.json.Parsed(Message) {
@@ -220,7 +220,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.patch(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Message, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn deleteMessage(self: *Client, channel_id: Snowflake, message_id: Snowflake) !void {
@@ -241,7 +241,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(Guild, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Guild, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn getGuildChannels(self: *Client, id: Snowflake) !std.json.Parsed([]Channel) {
@@ -249,7 +249,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]Channel, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]Channel, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn createGuildChannel(self: *Client, id: Snowflake, name: []const u8) !std.json.Parsed(Channel) {
@@ -259,7 +259,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.post(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Channel, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     fn guildMemberPath(
@@ -275,7 +275,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(GuildMember, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(GuildMember, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn getGuildMembers(self: *Client, guild_id: Snowflake, limit: ?u32) !std.json.Parsed([]GuildMember) {
@@ -285,7 +285,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]GuildMember, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]GuildMember, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     // Users
@@ -293,7 +293,7 @@ pub const Client = struct {
     pub fn getCurrentUser(self: *Client) !std.json.Parsed(User) {
         var resp = try self.http.get("/users/@me");
         defer resp.deinit();
-        return std.json.parseFromSlice(User, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(User, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn getUser(self: *Client, id: Snowflake) !std.json.Parsed(User) {
@@ -301,7 +301,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice(User, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(User, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     /// Signals shutdown to the run loop.
@@ -384,7 +384,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.patch("/users/@me", body);
         defer resp.deinit();
-        return std.json.parseFromSlice(User, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(User, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     // Guild management
@@ -396,7 +396,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.patch(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Guild, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Guild, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn deleteGuild(self: *Client, id: Snowflake) !void {
@@ -411,7 +411,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]Role, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]Role, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn createGuildRole(self: *Client, guild_id: Snowflake, data: anytype) !std.json.Parsed(Role) {
@@ -421,7 +421,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.post(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn modifyGuildRole(self: *Client, guild_id: Snowflake, role_id: Snowflake, data: anytype) !std.json.Parsed(Role) {
@@ -431,7 +431,7 @@ pub const Client = struct {
         defer self.allocator.free(body);
         var resp = try self.http.patch(path, body);
         defer resp.deinit();
-        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(Role, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn deleteGuildRole(self: *Client, guild_id: Snowflake, role_id: Snowflake) !void {
@@ -446,7 +446,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]Ban, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]Ban, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     pub fn createGuildBan(self: *Client, guild_id: Snowflake, user_id: Snowflake, data: anytype) !void {
@@ -493,7 +493,7 @@ pub const Client = struct {
         defer self.allocator.free(path);
         var resp = try self.http.get(path);
         defer resp.deinit();
-        return std.json.parseFromSlice([]Message, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice([]Message, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 
     // Gateway
@@ -501,7 +501,7 @@ pub const Client = struct {
     pub fn getGatewayBot(self: *Client) !std.json.Parsed(GatewayBotResponse) {
         var resp = try self.http.get("/gateway/bot");
         defer resp.deinit();
-        return std.json.parseFromSlice(GatewayBotResponse, self.allocator, resp.body, .{});
+        return std.json.parseFromSlice(GatewayBotResponse, self.allocator, resp.body, .{ .ignore_unknown_fields = true });
     }
 };
 
@@ -569,7 +569,7 @@ test "parse channel from mock response" {
         \\  "name": "general"
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Channel, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("general", parsed.value.name.?);
 }
@@ -597,7 +597,7 @@ test "parse message from mock response" {
         \\  "type": 0
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("hello", parsed.value.content);
 }
@@ -624,7 +624,7 @@ test "parse guild from mock response" {
         \\  "premium_progress_bar_enabled": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("Test Guild", parsed.value.name);
 }
@@ -640,7 +640,7 @@ test "parse user from mock response" {
         \\  "bot": true
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(User, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(User, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("testuser", parsed.value.username);
 }
@@ -661,7 +661,7 @@ test "parse guild member from mock response" {
         \\  "mute": false
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildMember, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("TestNick", parsed.value.nick.?);
 }
@@ -691,7 +691,7 @@ test "parse messages array from mock response" {
         \\  }
         \\]
     ;
-    const parsed = try std.json.parseFromSlice([]Message, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice([]Message, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
     try std.testing.expectEqualStrings("hello", parsed.value[0].content);

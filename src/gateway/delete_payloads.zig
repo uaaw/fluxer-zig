@@ -46,7 +46,7 @@ test "message delete payload json" {
         \\  "guild_id": "333333333333333333"
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(MessageDeletePayload, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(MessageDeletePayload, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 111111111111111111), parsed.value.id.toU64());
     try std.testing.expectEqual(@as(u64, 222222222222222222), parsed.value.channel_id.toU64());
@@ -61,7 +61,7 @@ test "guild delete payload json" {
         \\  "unavailable": true
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildDeletePayload, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildDeletePayload, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 555555555555555555), parsed.value.id.toU64());
     try std.testing.expect(parsed.value.unavailable);
@@ -76,7 +76,7 @@ test "channel delete payload json" {
         \\  "type": 0
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(ChannelDeletePayload, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(ChannelDeletePayload, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 333333333333333333), parsed.value.id.toU64());
     try std.testing.expectEqual(@as(u64, 444444444444444444), parsed.value.guild_id.?.toU64());
@@ -95,7 +95,7 @@ test "guild member remove payload json" {
         \\  }
         \\}
     ;
-    const parsed = try std.json.parseFromSlice(GuildMemberRemovePayload, allocator, json, .{});
+    const parsed = try std.json.parseFromSlice(GuildMemberRemovePayload, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 555555555555555555), parsed.value.guild_id.toU64());
     try std.testing.expectEqualStrings("testuser", parsed.value.user.username);
