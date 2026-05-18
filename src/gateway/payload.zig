@@ -99,6 +99,10 @@ pub const ActivityType = enum(u8) {
     watching = 3,
     custom = 4,
     competing = 5,
+
+    pub fn jsonStringify(self: ActivityType, jw: anytype) !void {
+        try jw.write(@intFromEnum(self));
+    }
 };
 
 test "gateway opcodes" {

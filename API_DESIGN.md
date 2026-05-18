@@ -142,6 +142,9 @@ pub const Client = struct {
     // Users
     pub fn getCurrentUser(self: *Client) !std.json.Parsed(User);
     pub fn getUser(self: *Client, id: Snowflake) !std.json.Parsed(User);
+
+    // Presence
+    pub fn updatePresence(self: *Client, status: Status, activities: []const Activity, since: ?u64, afk: bool) !void;
 };
 ```
 

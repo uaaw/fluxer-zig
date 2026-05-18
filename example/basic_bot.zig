@@ -176,6 +176,14 @@ pub fn main() !void {
     // Gateway connection with automatic reconnect support
     try client.connect(eh, &handler);
 
+    // Set initial presence to online with a "Playing fluxer-zig" activity
+    const activities = [_]fluxer.gateway.Activity{
+        .{ .name = "fluxer-zig", .type = .game },
+    };
+    client.updatePresence(.online, &activities, null, false) catch |err| {
+        std.log.warn("Failed to set initial presence: {s}", .{@errorName(err)});
+    };
+
     // Run for 60 seconds
     std.time.sleep(std.time.ns_per_s * 60);
 

@@ -665,6 +665,11 @@ pub const Shard = struct {
             .seq = self.sequence orelse return error.NoSequence,
         };
     }
+
+    /// Sends a PRESENCE_UPDATE (op 3) to the gateway.
+    pub fn updatePresence(self: *Shard, presence: payload.PresenceUpdate) !void {
+        try self.sendPayloadBody(.presence_update, presence);
+    }
 };
 
 test "shard gateway url is fluxer spec" {

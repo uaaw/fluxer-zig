@@ -29,9 +29,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - In-memory `Cache` using `std.AutoHashMap` with `Mutex`
 - High-level `Client` integrating REST, Gateway, and Cache layers
 - Documentation: `README.md`, `README_JA.md`, `API_DESIGN.md`, `API_DESIGN_JA.md`, `ARCHITECTURE.md`, `ARCHITECTURE_JA.md`, `DEVELOP.md`, `CONTRIBUTING.md`
+- 28 additional gateway events in EventDispatcher: reactions, roles, bans, typing, webhooks, invites, voice state/server, presence, threads, user update, channel pins, guild emojis/stickers, bulk operations
+- 31 new payload types in `delete_payloads.zig` for extended event support
+- New models: `VoiceState`, `Invite`
+- `Client.updatePresence()` for gateway presence/status updates (op 3)
+- `Client.run()` and `Client.shutdown()` for managed reconnect loop
+- `HttpClient.put()` convenience method
+- 26 new REST API methods: reactions (6), typing indicator, guild roles (5), guild bans (3), kick member, message pins (3), modify current user, modify guild, delete guild, get gateway bot
+- `Ban`, `GatewayBotResponse`, `SessionStartLimit` types
+- Comprehensive root.zig re-exports: 35+ additional types (Intents, ShardManager, RateLimiter, EventDispatcher, HeaderMap, etc.)
+- `ActivityType.jsonStringify` for proper integer serialization
 
 ### Fixed
 
 - Resolved future compilation error caused by `std.StringHashMap` `deinit` signature change by implementing a custom `HeaderMap` based on `ArrayList`
 - Fixed missing Gateway protocol flow (Hello → Identify → Ready → Heartbeat)
 - Fixed TLS stream issue where `std.crypto.tls.Client` was copied by value, causing encryption sequence numbers to desynchronize and drop connections; corrected by pointerizing the TLS client
+- Fixed `Cache.upsertMember` null user panic: now returns `error.MissingUser`
+- Fixed rate limiter race condition: `global_remaining` atomically decremented in `waitForRateLimit()` before request execution
+- Fixed `HttpClient.request()` not respecting rate limits: now calls `waitForRateLimit()` before sending
+- Fixed `build.zig` circular self-import
+- Fixed JSON parsing: all `parseFromSlice`/`parseFromValue` calls use `.ignore_unknown_fields = true` (90+ occurrences) to prevent `error.UnknownField` from API responses with extra fields
+- Fixed JSON memory safety: all `parseFromSlice` calls in `client.zig` use `.allocate = .alloc_always` to prevent use-after-free when response body is freed

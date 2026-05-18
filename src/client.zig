@@ -130,6 +130,24 @@ pub const Client = struct {
         self.dispatcher = null;
     }
 
+    /// Updates the bot's presence/status via the gateway.
+    /// Requires an active gateway connection. Sends to all shards.
+    pub fn updatePresence(self: *Client, status: gateway.Status, activities: []const gateway.Activity, since: ?u64, afk: bool) !void {
+        const presence = gateway.PresenceUpdate{
+            .since = since,
+            .activities = activities,
+            .status = status,
+            .afk = afk,
+        };
+        if (self.shard_manager) |*sm| {
+            for (sm.shards) |*shard| {
+                try shard.updatePresence(presence);
+            }
+        } else {
+            return error.NotConnected;
+        }
+    }
+
     /// Performs a raw HTTP request.
     pub fn request(
         self: *Client,
