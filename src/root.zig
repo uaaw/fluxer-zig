@@ -52,12 +52,20 @@ pub const EmbedAuthor = models.EmbedAuthor;
 pub const EmbedFooter = models.EmbedFooter;
 pub const EmbedMedia = models.EmbedMedia;
 pub const EmbedProvider = models.EmbedProvider;
+pub const Button = models.Button;
+pub const SelectMenu = models.SelectMenu;
+pub const ComponentType = models.ComponentType;
+pub const ButtonStyle = models.ButtonStyle;
+pub const SelectOption = models.SelectOption;
+pub const TextInput = models.TextInput;
+pub const ActionRow = models.ActionRow;
 
 test {
     std.testing.refAllDecls(@This());
     _ = @import("models/snowflake.zig");
     _ = @import("models/user.zig");
     _ = @import("models/message.zig");
+    _ = @import("models/message_component.zig");
     _ = @import("models/channel.zig");
     _ = @import("models/guild.zig");
     _ = @import("models/guild_member.zig");

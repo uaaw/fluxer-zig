@@ -1,6 +1,7 @@
 const std = @import("std");
 const Snowflake = @import("snowflake.zig").Snowflake;
 const User = @import("user.zig").User;
+const MessageComponent = @import("message_component.zig").MessageComponent;
 
 /// Fluxer message types. Includes Discord-compatible types.
 pub const MessageType = enum(u8) {
@@ -165,6 +166,8 @@ pub const Message = struct {
     message_snapshots: ?[]MessageSnapshot = null,
     /// Fluxer-specific: call info for call messages.
     call: ?CallInfo = null,
+    /// Message components (buttons, select menus, etc.).
+    components: ?[]MessageComponent = null,
 };
 
 test "message json" {

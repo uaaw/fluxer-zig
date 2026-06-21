@@ -74,3 +74,19 @@ pub const ApplicationCommandType = @import("interaction.zig").ApplicationCommand
 pub const ApplicationCommandOption = @import("interaction.zig").ApplicationCommandOption;
 pub const ApplicationCommandOptionType = @import("interaction.zig").ApplicationCommandOptionType;
 pub const ApplicationCommandOptionChoice = @import("interaction.zig").ApplicationCommandOptionChoice;
+/// Fluxer message component types.
+pub const ComponentType = @import("message_component.zig").ComponentType;
+/// Fluxer button style.
+pub const ButtonStyle = @import("message_component.zig").ButtonStyle;
+/// Fluxer button component.
+pub const Button = @import("message_component.zig").Button;
+/// Fluxer select menu option.
+pub const SelectOption = @import("message_component.zig").SelectOption;
+/// Fluxer select menu component.
+pub const SelectMenu = @import("message_component.zig").SelectMenu;
+/// Fluxer text input component.
+pub const TextInput = @import("message_component.zig").TextInput;
+/// Fluxer action row component.
+pub const ActionRow = @import("message_component.zig").ActionRow;
+/// Fluxer message component (union-like holder).
+pub const MessageComponent = @import("message_component.zig").MessageComponent;
