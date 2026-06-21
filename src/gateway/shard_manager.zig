@@ -22,6 +22,7 @@ pub const ShardManager = struct {
         const total_shards: u16 = @intCast(num_shards);
         for (0..num_shards) |i| {
             shards[i] = Shard.init(allocator, @intCast(i), total_shards, token_copy);
+            shards[i].intents = @intCast(intents);
         }
 
         return .{

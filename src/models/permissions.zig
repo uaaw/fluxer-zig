@@ -54,6 +54,7 @@ pub const Permissions = packed struct(u64) {
 
     /// Parses Permissions from a decimal string.
     pub fn fromString(str: []const u8) !Permissions {
+        if (str.len == 0) return Permissions{};
         const val = try std.fmt.parseInt(u64, str, 10);
         return @bitCast(val);
     }
@@ -100,6 +101,8 @@ pub const Permissions = packed struct(u64) {
         _ = options;
         switch (source) {
             .string => |s| return try fromString(s),
+            .integer => |i| return @bitCast(@as(u64, @intCast(i))),
+            .null => return Permissions{},
             else => return error.UnexpectedToken,
         }
     }

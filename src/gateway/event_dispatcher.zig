@@ -12,6 +12,7 @@ const GuildMember = @import("../models/guild_member.zig").GuildMember;
 const GuildMemberRemovePayload = @import("delete_payloads.zig").GuildMemberRemovePayload;
 const Cache = @import("../cache/cache.zig").Cache;
 const Snowflake = @import("../models/snowflake.zig").Snowflake;
+const User = @import("../models/user.zig").User;
 const Interaction = @import("../models/interaction.zig").Interaction;
 const dp = @import("delete_payloads.zig");
 
@@ -90,84 +91,89 @@ pub const EventDispatcher = struct {
         const data = payload.d orelse return;
 
         if (std.mem.eql(u8, t, "READY")) {
-            const parsed = std.json.parseFromValue(ReadyPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(ReadyPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch |err| {
+                std.log.err("READY parse failed: {s}", .{@errorName(err)});
+                return;
+            };
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertUser(parsed.value.user) catch {};
-                for (parsed.value.guilds) |guild| {
-                    cache.upsertGuild(guild) catch {};
+                if (parsed.value.guilds) |guilds| {
+                    for (guilds) |guild| {
+                        cache.upsertGuild(guild) catch {};
+                    }
                 }
             }
             self.handler.vtable.onReady(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_CREATE")) {
-            const parsed = std.json.parseFromValue(Message, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Message, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertMessage(parsed.value) catch {};
             }
             self.handler.vtable.onMessageCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_UPDATE")) {
-            const parsed = std.json.parseFromValue(Message, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Message, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertMessage(parsed.value) catch {};
             }
             self.handler.vtable.onMessageUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_DELETE")) {
-            const parsed = std.json.parseFromValue(MessageDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(MessageDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.removeMessage(parsed.value.id);
             }
             self.handler.vtable.onMessageDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_CREATE")) {
-            const parsed = std.json.parseFromValue(Guild, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Guild, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertGuild(parsed.value) catch {};
             }
             self.handler.vtable.onGuildCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_UPDATE")) {
-            const parsed = std.json.parseFromValue(Guild, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Guild, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertGuild(parsed.value) catch {};
             }
             self.handler.vtable.onGuildUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_DELETE")) {
-            const parsed = std.json.parseFromValue(GuildDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(GuildDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.removeGuild(parsed.value.id);
             }
             self.handler.vtable.onGuildDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "CHANNEL_CREATE")) {
-            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertChannel(parsed.value) catch {};
             }
             self.handler.vtable.onChannelCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "CHANNEL_UPDATE")) {
-            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.upsertChannel(parsed.value) catch {};
             }
             self.handler.vtable.onChannelUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "CHANNEL_DELETE")) {
-            const parsed = std.json.parseFromValue(ChannelDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(ChannelDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.removeChannel(parsed.value.id);
             }
             self.handler.vtable.onChannelDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_MEMBER_ADD")) {
-            const parsed = std.json.parseFromValue(GuildMember, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(GuildMember, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 const guild_id = if (data.object.get("guild_id")) |gv| blk: {
-                    const parsed_guild_id = std.json.parseFromValue(Snowflake, self.allocator, gv, .{ .ignore_unknown_fields = true }) catch break :blk null;
+                    const parsed_guild_id = std.json.parseFromValue(Snowflake, self.allocator, gv, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch break :blk null;
                     const id = parsed_guild_id.value;
                     parsed_guild_id.deinit();
                     break :blk id;
@@ -178,11 +184,11 @@ pub const EventDispatcher = struct {
             }
             self.handler.vtable.onGuildMemberAdd(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_MEMBER_UPDATE")) {
-            const parsed = std.json.parseFromValue(GuildMember, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(GuildMember, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 const guild_id = if (data.object.get("guild_id")) |gv| blk: {
-                    const parsed_guild_id = std.json.parseFromValue(Snowflake, self.allocator, gv, .{ .ignore_unknown_fields = true }) catch break :blk null;
+                    const parsed_guild_id = std.json.parseFromValue(Snowflake, self.allocator, gv, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch break :blk null;
                     const id = parsed_guild_id.value;
                     parsed_guild_id.deinit();
                     break :blk id;
@@ -193,130 +199,130 @@ pub const EventDispatcher = struct {
             }
             self.handler.vtable.onGuildMemberUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_MEMBER_REMOVE")) {
-            const parsed = std.json.parseFromValue(GuildMemberRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(GuildMemberRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             if (self.cache) |cache| {
                 cache.removeMember(parsed.value.guild_id, parsed.value.user.id);
             }
             self.handler.vtable.onGuildMemberRemove(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_ADD")) {
-            const parsed = std.json.parseFromValue(dp.MessageReactionAddPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.MessageReactionAddPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onMessageReactionAdd(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE")) {
-            const parsed = std.json.parseFromValue(dp.MessageReactionRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onMessageReactionRemove(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE_ALL")) {
-            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveAllPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveAllPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onMessageReactionRemoveAll(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_REACTION_REMOVE_EMOJI")) {
-            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveEmojiPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.MessageReactionRemoveEmojiPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onMessageReactionRemoveEmoji(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "MESSAGE_DELETE_BULK")) {
-            const parsed = std.json.parseFromValue(dp.MessageDeleteBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.MessageDeleteBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onMessageDeleteBulk(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_ROLE_CREATE")) {
-            const parsed = std.json.parseFromValue(dp.GuildRoleCreatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildRoleCreatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildRoleCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_ROLE_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.GuildRoleUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildRoleUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildRoleUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_ROLE_DELETE")) {
-            const parsed = std.json.parseFromValue(dp.GuildRoleDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildRoleDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildRoleDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_BAN_ADD")) {
-            const parsed = std.json.parseFromValue(dp.GuildBanAddPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildBanAddPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildBanAdd(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_BAN_REMOVE")) {
-            const parsed = std.json.parseFromValue(dp.GuildBanRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildBanRemovePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildBanRemove(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "TYPING_START")) {
-            const parsed = std.json.parseFromValue(dp.TypingStartPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.TypingStartPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onTypingStart(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "WEBHOOKS_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.WebhooksUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.WebhooksUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onWebhooksUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "INVITE_CREATE")) {
-            const parsed = std.json.parseFromValue(dp.InviteCreatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.InviteCreatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onInviteCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "INVITE_DELETE")) {
-            const parsed = std.json.parseFromValue(dp.InviteDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.InviteDeletePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onInviteDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "VOICE_STATE_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.VoiceStateUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.VoiceStateUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onVoiceStateUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "VOICE_SERVER_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.VoiceServerUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.VoiceServerUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onVoiceServerUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "PRESENCE_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.PresenceUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.PresenceUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onPresenceUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_CREATE")) {
-            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadCreate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_UPDATE")) {
-            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_DELETE")) {
-            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Channel, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadDelete(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_LIST_SYNC")) {
-            const parsed = std.json.parseFromValue(dp.ThreadListSyncPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.ThreadListSyncPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadListSync(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_MEMBER_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.ThreadMember, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.ThreadMember, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadMemberUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "THREAD_MEMBERS_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.ThreadMembersUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.ThreadMembersUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onThreadMembersUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "USER_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.UserUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.UserUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onUserUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "CHANNEL_PINS_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.ChannelPinsUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.ChannelPinsUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onChannelPinsUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_EMOJIS_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.GuildEmojisUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildEmojisUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildEmojisUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_STICKERS_UPDATE")) {
-            const parsed = std.json.parseFromValue(dp.GuildStickersUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildStickersUpdatePayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildStickersUpdate(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "GUILD_ROLE_UPDATE_BULK")) {
-            const parsed = std.json.parseFromValue(dp.GuildRoleUpdateBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.GuildRoleUpdateBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onGuildRoleUpdateBulk(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "CHANNEL_UPDATE_BULK")) {
-            const parsed = std.json.parseFromValue(dp.ChannelUpdateBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(dp.ChannelUpdateBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onChannelUpdateBulk(self.handler.ptr, parsed.value);
         } else if (std.mem.eql(u8, t, "INTERACTION_CREATE")) {
-            const parsed = std.json.parseFromValue(Interaction, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            const parsed = std.json.parseFromValue(Interaction, self.allocator, data, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onInteractionCreate(self.handler.ptr, parsed.value);
         }
@@ -488,7 +494,7 @@ test "EventDispatcher dispatches READY" {
     const json =
         \\{"op":0,"t":"READY","d":{"v":1,"user":{"id":"123456789012345678","username":"testbot","discriminator":null,"bot":true},"session_id":"abc123","guilds":[]}}
     ;
-    const parsed = try std.json.parseFromSlice(GatewayPayload, std.testing.allocator, json, .{ .ignore_unknown_fields = true });
+    const parsed = try std.json.parseFromSlice(GatewayPayload, std.testing.allocator, json, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
     defer parsed.deinit();
     dispatcher.dispatch(parsed.value);
 
@@ -507,7 +513,7 @@ test "EventDispatcher dispatches MESSAGE_CREATE" {
     const json =
         \\{"op":0,"t":"MESSAGE_CREATE","d":{"id":"111111111111111111","channel_id":"222222222222222222","author":{"id":"123456789012345678","username":"author","discriminator":null},"content":"hello","timestamp":"2024-01-01T00:00:00.000Z","tts":false,"mention_everyone":false,"mentions":[],"mention_roles":[],"attachments":[],"embeds":[],"pinned":false,"type":0}}
     ;
-    const parsed = try std.json.parseFromSlice(GatewayPayload, std.testing.allocator, json, .{ .ignore_unknown_fields = true });
+    const parsed = try std.json.parseFromSlice(GatewayPayload, std.testing.allocator, json, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
     defer parsed.deinit();
     dispatcher.dispatch(parsed.value);
 

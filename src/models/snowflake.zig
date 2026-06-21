@@ -39,6 +39,7 @@ pub const Snowflake = struct {
 
     /// Parses a Snowflake from a decimal string.
     pub fn parse(str: []const u8) !Snowflake {
+        if (str.len == 0) return error.InvalidCharacter;
         return .{ .value = try std.fmt.parseInt(u64, str, 10) };
     }
 
@@ -86,6 +87,7 @@ pub const Snowflake = struct {
         _ = options;
         switch (source) {
             .string => |s| return try parse(s),
+            .null => return Snowflake.fromU64(0),
             else => return error.UnexpectedToken,
         }
     }

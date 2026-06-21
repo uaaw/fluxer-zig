@@ -16,7 +16,7 @@ pub const RoleTags = struct {
 pub const Role = struct {
     id: Snowflake,
     name: []const u8,
-    color: u32,
+    color: i32,
     hoist: bool,
     icon: ?[]const u8 = null,
     unicode_emoji: ?[]const u8 = null,
@@ -125,16 +125,16 @@ pub const Guild = struct {
     mfa_level: u32,
     application_id: ?Snowflake = null,
     system_channel_id: ?Snowflake = null,
-    system_channel_flags: u32,
+    system_channel_flags: u32 = 0,
     rules_channel_id: ?Snowflake = null,
     max_presences: ?u32 = null,
     max_members: ?u32 = null,
     vanity_url_code: ?[]const u8 = null,
     description: ?[]const u8 = null,
     banner: ?[]const u8 = null,
-    premium_tier: u32,
+    premium_tier: u32 = 0,
     premium_subscription_count: ?u32 = null,
-    preferred_locale: []const u8,
+    preferred_locale: ?[]const u8 = null,
     public_updates_channel_id: ?Snowflake = null,
     max_video_channel_users: ?u32 = null,
     approximate_member_count: ?u32 = null,
@@ -142,7 +142,7 @@ pub const Guild = struct {
     welcome_screen: ?WelcomeScreen = null,
     nsfw_level: u32,
     stickers: ?[]Sticker = null,
-    premium_progress_bar_enabled: bool,
+    premium_progress_bar_enabled: bool = false,
     channels: ?[]Channel = null,
     members: ?[]GuildMember = null,
     /// Fluxer-specific: disabled operations bitmask.
@@ -178,7 +178,7 @@ test "guild json" {
     const parsed = try std.json.parseFromSlice(Guild, allocator, json, .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     try std.testing.expectEqualStrings("Test Guild", parsed.value.name);
-    try std.testing.expectEqualStrings("en-US", parsed.value.preferred_locale);
+    try std.testing.expectEqualStrings("en-US", parsed.value.preferred_locale.?);
 }
 
 test "guild json with channels and members" {

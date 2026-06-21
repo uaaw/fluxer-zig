@@ -22,11 +22,11 @@ pub const User = struct {
     /// Fluxer-specific: user biography / about me.
     bio: ?[]const u8 = null,
     /// Fluxer-specific: accent color for profile (Int32).
-    accent_color: ?u32 = null,
+    accent_color: ?i32 = null,
     /// Fluxer-specific: dominant color extracted from avatar (Int32).
-    avatar_color: ?u32 = null,
-    /// Fluxer-specific: internal/admin traits string.
-    traits: ?[]const u8 = null,
+    avatar_color: ?i32 = null,
+    /// Fluxer-specific: internal/admin traits (array of strings).
+    traits: ?[][]const u8 = null,
     /// Fluxer-specific: premium lifetime sequence number.
     premium_lifetime_sequence: ?u64 = null,
 
@@ -89,7 +89,7 @@ test "user json with fluxer-specific fields" {
         \\  "bio": "Hello, fluxer!",
         \\  "accent_color": 16711680,
         \\  "avatar_color": 65280,
-        \\  "traits": "admin,beta",
+        \\  "traits": ["admin", "beta"],
         \\  "premium_lifetime_sequence": 42
         \\}
     ;
@@ -98,8 +98,10 @@ test "user json with fluxer-specific fields" {
     try std.testing.expectEqualStrings("fluxeruser", parsed.value.username);
     try std.testing.expectEqualStrings("they/them", parsed.value.pronouns.?);
     try std.testing.expectEqualStrings("Hello, fluxer!", parsed.value.bio.?);
-    try std.testing.expectEqual(@as(u32, 16711680), parsed.value.accent_color.?);
-    try std.testing.expectEqual(@as(u32, 65280), parsed.value.avatar_color.?);
-    try std.testing.expectEqualStrings("admin,beta", parsed.value.traits.?);
+    try std.testing.expectEqual(@as(i32, 16711680), parsed.value.accent_color.?);
+    try std.testing.expectEqual(@as(i32, 65280), parsed.value.avatar_color.?);
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.traits.?.len);
+    try std.testing.expectEqualStrings("admin", parsed.value.traits.?[0]);
+    try std.testing.expectEqualStrings("beta", parsed.value.traits.?[1]);
     try std.testing.expectEqual(@as(u64, 42), parsed.value.premium_lifetime_sequence.?);
 }
