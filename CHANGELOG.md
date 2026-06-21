@@ -51,3 +51,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed `build.zig` circular self-import
 - Fixed JSON parsing: all `parseFromSlice`/`parseFromValue` calls use `.ignore_unknown_fields = true` (90+ occurrences) to prevent `error.UnknownField` from API responses with extra fields
 - Fixed JSON memory safety: all `parseFromSlice` calls in `client.zig` use `.allocate = .alloc_always` to prevent use-after-free when response body is freed
+- Fixed all `parseFromValue` calls in `event_dispatcher.zig` use `.allocate = .alloc_always` to prevent dangling pointers in parsed event data
+- Fixed `ShardManager` not passing intents to individual shards, causing IDENTIFY to always send `intents: 0`
+- Fixed `ReadyPayload` fields (`v`, `guilds`) made optional for Fluxer API compatibility
+- Fixed `Guild` required fields (`system_channel_flags`, `premium_tier`, `preferred_locale`, `premium_progress_bar_enabled`) made optional with defaults for partial Guild objects
+- Fixed `Role.color` type (`u32` → `i32`) and `User.accent_color`/`avatar_color` type (`u32` → `i32`) to match Fluxer API `Int32`
+- Fixed `User.traits` type (`?[]const u8` → `?[][]const u8`) to match Fluxer's array format
+- Fixed `Permissions.fromString` handles empty string (returns default) and `Permissions.jsonParseFromValue` handles integer/null JSON values
+- Fixed `Snowflake.parse` handles empty string and `Snowflake.jsonParseFromValue` handles null values
