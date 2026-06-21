@@ -50,12 +50,49 @@ pub const EmbedField = struct {
     @"inline": bool = false,
 };
 
+/// Embed author object.
+pub const EmbedAuthor = struct {
+    name: []const u8,
+    url: ?[]const u8 = null,
+    icon_url: ?[]const u8 = null,
+    proxy_icon_url: ?[]const u8 = null,
+};
+
+/// Embed footer object.
+pub const EmbedFooter = struct {
+    text: []const u8,
+    icon_url: ?[]const u8 = null,
+    proxy_icon_url: ?[]const u8 = null,
+};
+
+/// Embed image/thumbnail/video object.
+pub const EmbedMedia = struct {
+    url: []const u8,
+    proxy_url: ?[]const u8 = null,
+    height: ?u32 = null,
+    width: ?u32 = null,
+};
+
+/// Embed provider object.
+pub const EmbedProvider = struct {
+    name: ?[]const u8 = null,
+    url: ?[]const u8 = null,
+};
+
 /// Fluxer embed object.
 pub const Embed = struct {
     title: ?[]const u8 = null,
+    type: ?[]const u8 = null,
     description: ?[]const u8 = null,
     url: ?[]const u8 = null,
+    timestamp: ?[]const u8 = null,
     color: ?u32 = null,
+    footer: ?EmbedFooter = null,
+    image: ?EmbedMedia = null,
+    thumbnail: ?EmbedMedia = null,
+    video: ?EmbedMedia = null,
+    provider: ?EmbedProvider = null,
+    author: ?EmbedAuthor = null,
     fields: ?[]EmbedField = null,
 };
 
@@ -222,4 +259,136 @@ test "message json with fluxer-specific fields" {
     try std.testing.expectEqualStrings("original", parsed.value.message_snapshots.?[0].content);
     try std.testing.expectEqual(@as(usize, 1), parsed.value.call.?.participants.len);
     try std.testing.expectEqualStrings("2024-01-01T01:00:00.000Z", parsed.value.call.?.ended_timestamp.?);
+}
+
+test "embed json with all fields" {
+    const allocator = std.testing.allocator;
+    const json =
+        \\{
+        \\  "id": "111111111111111111",
+        \\  "channel_id": "222222222222222222",
+        \\  "author": {
+        \\    "id": "123456789012345678",
+        \\    "username": "author",
+        \\    "discriminator": null
+        \\  },
+        \\  "content": "embed test",
+        \\  "timestamp": "2024-01-01T00:00:00.000Z",
+        \\  "tts": false,
+        \\  "mention_everyone": false,
+        \\  "mentions": [],
+        \\  "mention_roles": [],
+        \\  "attachments": [],
+        \\  "embeds": [
+        \\    {
+        \\      "title": "Full Embed",
+        \\      "type": "rich",
+        \\      "description": "A full embed with all fields",
+        \\      "url": "https://example.com",
+        \\      "timestamp": "2024-01-01T00:00:00.000Z",
+        \\      "color": 16711680,
+        \\      "footer": {
+        \\        "text": "Footer text",
+        \\        "icon_url": "https://example.com/icon.png",
+        \\        "proxy_icon_url": "https://proxy.example.com/icon.png"
+        \\      },
+        \\      "image": {
+        \\        "url": "https://example.com/image.png",
+        \\        "proxy_url": "https://proxy.example.com/image.png",
+        \\        "height": 200,
+        \\        "width": 400
+        \\      },
+        \\      "thumbnail": {
+        \\        "url": "https://example.com/thumb.png",
+        \\        "proxy_url": "https://proxy.example.com/thumb.png",
+        \\        "height": 50,
+        \\        "width": 50
+        \\      },
+        \\      "video": {
+        \\        "url": "https://example.com/video.mp4",
+        \\        "proxy_url": "https://proxy.example.com/video.mp4",
+        \\        "height": 720,
+        \\        "width": 1280
+        \\      },
+        \\      "provider": {
+        \\        "name": "Example",
+        \\        "url": "https://example.com"
+        \\      },
+        \\      "author": {
+        \\        "name": "Author Name",
+        \\        "url": "https://example.com/author",
+        \\        "icon_url": "https://example.com/author.png",
+        \\        "proxy_icon_url": "https://proxy.example.com/author.png"
+        \\      },
+        \\      "fields": [
+        \\        {
+        \\          "name": "Field 1",
+        \\          "value": "Value 1",
+        \\          "inline": true
+        \\        },
+        \\        {
+        \\          "name": "Field 2",
+        \\          "value": "Value 2",
+        \\          "inline": false
+        \\        }
+        \\      ]
+        \\    }
+        \\  ],
+        \\  "pinned": false,
+        \\  "type": 0
+        \\}
+    ;
+    const parsed = try std.json.parseFromSlice(Message, allocator, json, .{ .ignore_unknown_fields = true });
+    defer parsed.deinit();
+
+    const embed = parsed.value.embeds[0];
+
+    try std.testing.expectEqualStrings("Full Embed", embed.title.?);
+    try std.testing.expectEqualStrings("rich", embed.type.?);
+    try std.testing.expectEqualStrings("A full embed with all fields", embed.description.?);
+    try std.testing.expectEqualStrings("https://example.com", embed.url.?);
+    try std.testing.expectEqualStrings("2024-01-01T00:00:00.000Z", embed.timestamp.?);
+    try std.testing.expectEqual(@as(u32, 16711680), embed.color.?);
+
+    // Footer
+    try std.testing.expectEqualStrings("Footer text", embed.footer.?.text);
+    try std.testing.expectEqualStrings("https://example.com/icon.png", embed.footer.?.icon_url.?);
+    try std.testing.expectEqualStrings("https://proxy.example.com/icon.png", embed.footer.?.proxy_icon_url.?);
+
+    // Image
+    try std.testing.expectEqualStrings("https://example.com/image.png", embed.image.?.url);
+    try std.testing.expectEqualStrings("https://proxy.example.com/image.png", embed.image.?.proxy_url.?);
+    try std.testing.expectEqual(@as(u32, 200), embed.image.?.height.?);
+    try std.testing.expectEqual(@as(u32, 400), embed.image.?.width.?);
+
+    // Thumbnail
+    try std.testing.expectEqualStrings("https://example.com/thumb.png", embed.thumbnail.?.url);
+    try std.testing.expectEqualStrings("https://proxy.example.com/thumb.png", embed.thumbnail.?.proxy_url.?);
+    try std.testing.expectEqual(@as(u32, 50), embed.thumbnail.?.height.?);
+    try std.testing.expectEqual(@as(u32, 50), embed.thumbnail.?.width.?);
+
+    // Video
+    try std.testing.expectEqualStrings("https://example.com/video.mp4", embed.video.?.url);
+    try std.testing.expectEqualStrings("https://proxy.example.com/video.mp4", embed.video.?.proxy_url.?);
+    try std.testing.expectEqual(@as(u32, 720), embed.video.?.height.?);
+    try std.testing.expectEqual(@as(u32, 1280), embed.video.?.width.?);
+
+    // Provider
+    try std.testing.expectEqualStrings("Example", embed.provider.?.name.?);
+    try std.testing.expectEqualStrings("https://example.com", embed.provider.?.url.?);
+
+    // Author
+    try std.testing.expectEqualStrings("Author Name", embed.author.?.name);
+    try std.testing.expectEqualStrings("https://example.com/author", embed.author.?.url.?);
+    try std.testing.expectEqualStrings("https://example.com/author.png", embed.author.?.icon_url.?);
+    try std.testing.expectEqualStrings("https://proxy.example.com/author.png", embed.author.?.proxy_icon_url.?);
+
+    // Fields
+    try std.testing.expectEqual(@as(usize, 2), embed.fields.?.len);
+    try std.testing.expectEqualStrings("Field 1", embed.fields.?[0].name);
+    try std.testing.expectEqualStrings("Value 1", embed.fields.?[0].value);
+    try std.testing.expect(embed.fields.?[0].@"inline");
+    try std.testing.expectEqualStrings("Field 2", embed.fields.?[1].name);
+    try std.testing.expectEqualStrings("Value 2", embed.fields.?[1].value);
+    try std.testing.expect(!embed.fields.?[1].@"inline");
 }

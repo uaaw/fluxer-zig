@@ -10,6 +10,14 @@ pub const MessageType = @import("message.zig").MessageType;
 pub const Attachment = @import("message.zig").Attachment;
 /// Fluxer embed object.
 pub const Embed = @import("message.zig").Embed;
+/// Fluxer embed author object.
+pub const EmbedAuthor = @import("message.zig").EmbedAuthor;
+/// Fluxer embed footer object.
+pub const EmbedFooter = @import("message.zig").EmbedFooter;
+/// Fluxer embed media object (image/thumbnail/video).
+pub const EmbedMedia = @import("message.zig").EmbedMedia;
+/// Fluxer embed provider object.
+pub const EmbedProvider = @import("message.zig").EmbedProvider;
 /// Fluxer embed field object.
 pub const EmbedField = @import("message.zig").EmbedField;
 /// Fluxer reaction object.
