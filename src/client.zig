@@ -19,6 +19,7 @@ const Cache = cache_mod.Cache;
 const CacheOptions = cache_mod.CacheOptions;
 const Role = models.Role;
 const Interaction = models.Interaction;
+const Webhook = models.Webhook;
 
 const Ban = struct {
     reason: ?[]const u8 = null,
@@ -613,6 +614,68 @@ pub const Client = struct {
         const path = try std.fmt.allocPrint(self.allocator, "/interactions/{d}/{s}/callback", .{ interaction_id.toU64(), interaction_token });
         defer self.allocator.free(path);
         const body = try std.json.stringifyAlloc(self.allocator, response, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
+    }
+
+    // Webhooks
+
+    pub fn createWebhook(self: *Client, channel_id: Snowflake, name: []const u8) !std.json.Parsed(Webhook) {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/webhooks", .{channel_id.toU64()});
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, .{ .name = name }, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Webhook, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn getChannelWebhooks(self: *Client, channel_id: Snowflake) !std.json.Parsed([]Webhook) {
+        const path = try std.fmt.allocPrint(self.allocator, "/channels/{d}/webhooks", .{channel_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]Webhook, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn getGuildWebhooks(self: *Client, guild_id: Snowflake) !std.json.Parsed([]Webhook) {
+        const path = try std.fmt.allocPrint(self.allocator, "/guilds/{d}/webhooks", .{guild_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]Webhook, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn getWebhook(self: *Client, webhook_id: Snowflake) !std.json.Parsed(Webhook) {
+        const path = try std.fmt.allocPrint(self.allocator, "/webhooks/{d}", .{webhook_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Webhook, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn modifyWebhook(self: *Client, webhook_id: Snowflake, data: anytype) !std.json.Parsed(Webhook) {
+        const path = try std.fmt.allocPrint(self.allocator, "/webhooks/{d}", .{webhook_id.toU64()});
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(Webhook, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn deleteWebhook(self: *Client, webhook_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/webhooks/{d}", .{webhook_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn executeWebhook(self: *Client, webhook_id: Snowflake, webhook_token: []const u8, data: anytype) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/webhooks/{d}/{s}", .{ webhook_id.toU64(), webhook_token });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, data, .{});
         defer self.allocator.free(body);
         var resp = try self.http.post(path, body);
         defer resp.deinit();

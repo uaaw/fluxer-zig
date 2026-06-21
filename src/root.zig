@@ -59,6 +59,7 @@ pub const ButtonStyle = models.ButtonStyle;
 pub const SelectOption = models.SelectOption;
 pub const TextInput = models.TextInput;
 pub const ActionRow = models.ActionRow;
+pub const Webhook = models.Webhook;
 
 test {
     std.testing.refAllDecls(@This());

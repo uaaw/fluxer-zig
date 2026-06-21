@@ -62,6 +62,10 @@ pub const Permissions = @import("permissions.zig").Permissions;
 pub const VoiceState = @import("voice_state.zig").VoiceState;
 /// Fluxer invite object.
 pub const Invite = @import("invite.zig").Invite;
+/// Fluxer webhook object.
+pub const Webhook = @import("webhook.zig").Webhook;
+/// Fluxer webhook types.
+pub const WebhookType = @import("webhook.zig").WebhookType;
 
 pub const Interaction = @import("interaction.zig").Interaction;
 pub const InteractionType = @import("interaction.zig").InteractionType;
