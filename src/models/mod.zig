@@ -62,3 +62,15 @@ pub const Permissions = @import("permissions.zig").Permissions;
 pub const VoiceState = @import("voice_state.zig").VoiceState;
 /// Fluxer invite object.
 pub const Invite = @import("invite.zig").Invite;
+
+pub const Interaction = @import("interaction.zig").Interaction;
+pub const InteractionType = @import("interaction.zig").InteractionType;
+pub const InteractionData = @import("interaction.zig").InteractionData;
+pub const InteractionResponse = @import("interaction.zig").InteractionResponse;
+pub const InteractionCallbackType = @import("interaction.zig").InteractionCallbackType;
+pub const InteractionCallbackData = @import("interaction.zig").InteractionCallbackData;
+pub const ApplicationCommand = @import("interaction.zig").ApplicationCommand;
+pub const ApplicationCommandType = @import("interaction.zig").ApplicationCommandType;
+pub const ApplicationCommandOption = @import("interaction.zig").ApplicationCommandOption;
+pub const ApplicationCommandOptionType = @import("interaction.zig").ApplicationCommandOptionType;
+pub const ApplicationCommandOptionChoice = @import("interaction.zig").ApplicationCommandOptionChoice;

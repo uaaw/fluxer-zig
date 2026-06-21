@@ -46,6 +46,8 @@ pub const CacheOptions = cache.CacheOptions;
 
 pub const VoiceState = models.VoiceState;
 pub const Invite = models.Invite;
+pub const Interaction = models.Interaction;
+pub const ApplicationCommand = models.ApplicationCommand;
 pub const EmbedAuthor = models.EmbedAuthor;
 pub const EmbedFooter = models.EmbedFooter;
 pub const EmbedMedia = models.EmbedMedia;

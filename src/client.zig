@@ -18,6 +18,7 @@ const GuildMember = models.GuildMember;
 const Cache = cache_mod.Cache;
 const CacheOptions = cache_mod.CacheOptions;
 const Role = models.Role;
+const Interaction = models.Interaction;
 
 const Ban = struct {
     reason: ?[]const u8 = null,
@@ -520,6 +521,101 @@ pub const Client = struct {
         var resp = try self.http.get("/gateway/bot");
         defer resp.deinit();
         return std.json.parseFromSlice(GatewayBotResponse, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    // Application Commands
+
+    fn applicationCommandsPath(allocator: std.mem.Allocator, app_id: Snowflake, guild_id: ?Snowflake) ![]const u8 {
+        if (guild_id) |gid| {
+            return std.fmt.allocPrint(allocator, "/applications/{d}/guilds/{d}/commands", .{ app_id.toU64(), gid.toU64() });
+        }
+        return std.fmt.allocPrint(allocator, "/applications/{d}/commands", .{app_id.toU64()});
+    }
+
+    fn applicationCommandPath(allocator: std.mem.Allocator, app_id: Snowflake, guild_id: ?Snowflake, cmd_id: Snowflake) ![]const u8 {
+        if (guild_id) |gid| {
+            return std.fmt.allocPrint(allocator, "/applications/{d}/guilds/{d}/commands/{d}", .{ app_id.toU64(), gid.toU64(), cmd_id.toU64() });
+        }
+        return std.fmt.allocPrint(allocator, "/applications/{d}/commands/{d}", .{ app_id.toU64(), cmd_id.toU64() });
+    }
+
+    pub fn createGlobalCommand(self: *Client, app_id: Snowflake, cmd: anytype) !std.json.Parsed(models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/commands", .{app_id.toU64()});
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, cmd, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn getGlobalCommands(self: *Client, app_id: Snowflake) !std.json.Parsed([]models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/commands", .{app_id.toU64()});
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn createGuildCommand(self: *Client, app_id: Snowflake, guild_id: Snowflake, cmd: anytype) !std.json.Parsed(models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/guilds/{d}/commands", .{ app_id.toU64(), guild_id.toU64() });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, cmd, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn getGuildCommands(self: *Client, app_id: Snowflake, guild_id: Snowflake) !std.json.Parsed([]models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/guilds/{d}/commands", .{ app_id.toU64(), guild_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.get(path);
+        defer resp.deinit();
+        return std.json.parseFromSlice([]models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn editGlobalCommand(self: *Client, app_id: Snowflake, cmd_id: Snowflake, cmd: anytype) !std.json.Parsed(models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/commands/{d}", .{ app_id.toU64(), cmd_id.toU64() });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, cmd, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn deleteGlobalCommand(self: *Client, app_id: Snowflake, cmd_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/commands/{d}", .{ app_id.toU64(), cmd_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn editGuildCommand(self: *Client, app_id: Snowflake, guild_id: Snowflake, cmd_id: Snowflake, cmd: anytype) !std.json.Parsed(models.ApplicationCommand) {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/guilds/{d}/commands/{d}", .{ app_id.toU64(), guild_id.toU64(), cmd_id.toU64() });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, cmd, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.patch(path, body);
+        defer resp.deinit();
+        return std.json.parseFromSlice(models.ApplicationCommand, self.allocator, resp.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
+    }
+
+    pub fn deleteGuildCommand(self: *Client, app_id: Snowflake, guild_id: Snowflake, cmd_id: Snowflake) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/applications/{d}/guilds/{d}/commands/{d}", .{ app_id.toU64(), guild_id.toU64(), cmd_id.toU64() });
+        defer self.allocator.free(path);
+        var resp = try self.http.delete(path);
+        defer resp.deinit();
+    }
+
+    pub fn createInteractionResponse(self: *Client, interaction_id: Snowflake, interaction_token: []const u8, response: anytype) !void {
+        const path = try std.fmt.allocPrint(self.allocator, "/interactions/{d}/{s}/callback", .{ interaction_id.toU64(), interaction_token });
+        defer self.allocator.free(path);
+        const body = try std.json.stringifyAlloc(self.allocator, response, .{});
+        defer self.allocator.free(body);
+        var resp = try self.http.post(path, body);
+        defer resp.deinit();
     }
 };
 

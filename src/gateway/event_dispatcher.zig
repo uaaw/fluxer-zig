@@ -12,6 +12,7 @@ const GuildMember = @import("../models/guild_member.zig").GuildMember;
 const GuildMemberRemovePayload = @import("delete_payloads.zig").GuildMemberRemovePayload;
 const Cache = @import("../cache/cache.zig").Cache;
 const Snowflake = @import("../models/snowflake.zig").Snowflake;
+const Interaction = @import("../models/interaction.zig").Interaction;
 const dp = @import("delete_payloads.zig");
 
 /// VTable for event handlers.
@@ -61,6 +62,7 @@ pub const EventHandler = struct {
         onChannelUpdateBulk: *const fn (ptr: *anyopaque, payload: dp.ChannelUpdateBulkPayload) void,
         onRawGatewayPayload: *const fn (ptr: *anyopaque, payload: GatewayPayload) void,
         onRawREST: *const fn (ptr: *anyopaque, response: Response) void,
+        onInteractionCreate: *const fn (ptr: *anyopaque, payload: Interaction) void,
     };
 
     ptr: *anyopaque,
@@ -313,6 +315,10 @@ pub const EventDispatcher = struct {
             const parsed = std.json.parseFromValue(dp.ChannelUpdateBulkPayload, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
             self.handler.vtable.onChannelUpdateBulk(self.handler.ptr, parsed.value);
+        } else if (std.mem.eql(u8, t, "INTERACTION_CREATE")) {
+            const parsed = std.json.parseFromValue(Interaction, self.allocator, data, .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            self.handler.vtable.onInteractionCreate(self.handler.ptr, parsed.value);
         }
     }
 
@@ -372,6 +378,7 @@ const MockHandler = struct {
         .onChannelUpdateBulk = noopChannelUpdateBulk,
         .onRawGatewayPayload = onRawGatewayPayload,
         .onRawREST = onRawREST,
+        .onInteractionCreate = noopInteraction,
     };
 
     fn onReady(ptr: *anyopaque, payload: ReadyPayload) void {
@@ -467,6 +474,7 @@ const MockHandler = struct {
     fn noopStickersUpdate(ptr: *anyopaque, payload: dp.GuildStickersUpdatePayload) void { _ = ptr; _ = payload; }
     fn noopRoleUpdateBulk(ptr: *anyopaque, payload: dp.GuildRoleUpdateBulkPayload) void { _ = ptr; _ = payload; }
     fn noopChannelUpdateBulk(ptr: *anyopaque, payload: dp.ChannelUpdateBulkPayload) void { _ = ptr; _ = payload; }
+    fn noopInteraction(ptr: *anyopaque, payload: Interaction) void { _ = ptr; _ = payload; }
 };
 
 test "EventDispatcher dispatches READY" {

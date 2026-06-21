@@ -70,6 +70,8 @@ pub const RelationshipRemovePayload = delete_payloads.RelationshipRemovePayload;
 pub const GuildRoleUpdateBulkPayload = delete_payloads.GuildRoleUpdateBulkPayload;
 pub const ChannelUpdateBulkPayload = delete_payloads.ChannelUpdateBulkPayload;
 
+pub const Interaction = @import("../models/interaction.zig").Interaction;
+
 pub const Heartbeat = heartbeat.Heartbeat;
 pub const default_interval_ms = heartbeat.default_interval_ms;
 pub const timeout_ms = heartbeat.timeout_ms;
