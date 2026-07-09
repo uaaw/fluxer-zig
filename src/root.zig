@@ -7,8 +7,14 @@ pub const rest = @import("rest/mod.zig");
 pub const gateway = @import("gateway/mod.zig");
 pub const cache = @import("cache/mod.zig");
 pub const websocket = @import("websocket/mod.zig");
+pub const commands = @import("commands/mod.zig");
 pub const Client = @import("client.zig").Client;
 pub const ClientOptions = @import("client.zig").ClientOptions;
+
+pub const prefixParse = commands.parse;
+pub const prefixMatchCommand = commands.matchCommand;
+pub const PrefixParsed = commands.Parsed;
+pub const default_prefix = commands.default_prefix;
 
 pub const Intents = gateway.Intents;
 pub const ShardManager = gateway.ShardManager;
@@ -76,5 +82,6 @@ test {
     _ = @import("gateway/mod.zig");
     _ = @import("cache/mod.zig");
     _ = @import("websocket/mod.zig");
+    _ = @import("commands/mod.zig");
     _ = @import("client.zig");
 }
