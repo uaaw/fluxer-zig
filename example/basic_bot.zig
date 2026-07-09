@@ -6,7 +6,8 @@ const fluxer = @import("fluxer");
 // Load FLUXER_BOT_TOKEN from the environment — never hardcode or commit tokens.
 
 /// Command prefix. Messages must start with this (after trim) to be treated as commands.
-const COMMAND_PREFIX = "!";
+/// Uses the library default (`fluxer.default_prefix` / `"!"`).
+const COMMAND_PREFIX = fluxer.default_prefix;
 
 const MyHandler = struct {
     allocator: std.mem.Allocator,
@@ -80,9 +81,9 @@ const MyHandler = struct {
         if (payload.author.bot) return;
 
         const trimmed = std.mem.trim(u8, payload.content, " \t\r\n");
-        const parsed = parsePrefixCommand(trimmed, COMMAND_PREFIX) orelse return;
+        const parsed = fluxer.prefixParse(trimmed, COMMAND_PREFIX) orelse return;
 
-        if (std.ascii.eqlIgnoreCase(parsed.name, "ping")) {
+        if (fluxer.prefixMatchCommand(parsed, "ping")) {
             std.log.info("Command ping (args={s}) from {s} in channel {d}", .{
                 parsed.args,
                 payload.author.username,
@@ -92,7 +93,7 @@ const MyHandler = struct {
             return;
         }
 
-        if (std.ascii.eqlIgnoreCase(parsed.name, "help")) {
+        if (fluxer.prefixMatchCommand(parsed, "help")) {
             std.log.info("Command help from {s} in channel {d}", .{
                 payload.author.username,
                 payload.channel_id.toU64(),
@@ -109,22 +110,6 @@ const MyHandler = struct {
         };
         defer sent.deinit();
         std.log.info("Replied: {s}", .{content});
-    }
-
-    /// True prefix parse: `{prefix}{name}[ {args...}]`.
-    /// Returns null if content does not start with prefix or name is empty.
-    fn parsePrefixCommand(content: []const u8, prefix: []const u8) ?struct { name: []const u8, args: []const u8 } {
-        if (!std.mem.startsWith(u8, content, prefix)) return null;
-        const rest = content[prefix.len..];
-        if (rest.len == 0) return null;
-
-        const name_end = std.mem.indexOfAny(u8, rest, " \t") orelse rest.len;
-        const name = rest[0..name_end];
-        if (name.len == 0) return null;
-
-        const after_name = rest[name_end..];
-        const args = std.mem.trimLeft(u8, after_name, " \t");
-        return .{ .name = name, .args = args };
     }
 
     fn noopMessage(ptr: *anyopaque, payload: fluxer.models.Message) void {

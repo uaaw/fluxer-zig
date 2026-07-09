@@ -11,10 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - REST: avoid `HeaderMap` double-free on non-success HTTP responses (error paths previously ran both `response.deinit()` and `errdefer headers.deinit()`, freeing entries twice under safety allocators)
 - REST: own rate-limit route keys so temporary path buffers remain valid after request setup
 
+### Added
+
+- `commands` module: pure prefix helpers `parse` / `matchCommand` (`fluxer.prefixParse`, `fluxer.prefixMatchCommand`, `fluxer.default_prefix = "!"`) for `{prefix}{command}[ args...]`
+
 ### Changed
 
 - Docs/examples: recommend **prefix commands** on Fluxer (`MESSAGE_CREATE` + `createMessage`); application slash commands are not implemented on Fluxer yet (`createGlobalCommand` returns 404)
-- `example/basic_bot.zig`: true prefix routing with documented `COMMAND_PREFIX = "!"` — `!ping` / `!ping args` → `pong`, `!help` → short help; ignores bot authors; `FLUXER_BOT_TOKEN` only; `connect` + keep-alive (not `Client.run`)
+- `example/basic_bot.zig`: true prefix routing via library helpers (`COMMAND_PREFIX = fluxer.default_prefix`) — `!ping` / `!ping args` → `pong`, `!help` → short help; ignores bot authors; `FLUXER_BOT_TOKEN` only; `connect` + keep-alive (not `Client.run`)
 
 ## [0.0.1]
 
