@@ -52,6 +52,7 @@ const MyHandler = struct {
         .onChannelUpdateBulk = noopChannelUpdateBulk,
         .onRawGatewayPayload = noopRaw,
         .onRawREST = noopREST,
+        .onInteractionCreate = noopInteraction,
     };
 
     pub fn onReady(ptr: *anyopaque, payload: fluxer.gateway.ReadyPayload) void {
@@ -151,6 +152,7 @@ const MyHandler = struct {
     fn noopStickersUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildStickersUpdatePayload) void { _ = ptr; _ = payload; }
     fn noopRoleUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleUpdateBulkPayload) void { _ = ptr; _ = payload; }
     fn noopChannelUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.ChannelUpdateBulkPayload) void { _ = ptr; _ = payload; }
+    fn noopInteraction(ptr: *anyopaque, payload: fluxer.models.Interaction) void { _ = ptr; _ = payload; }
 };
 
 pub fn main() !void {

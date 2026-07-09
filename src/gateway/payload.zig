@@ -70,7 +70,7 @@ pub const ResumeBody = struct {
 /// Presence update payload.
 pub const PresenceUpdate = struct {
     since: ?u64,
-    activities: []Activity,
+    activities: []const Activity,
     status: Status,
     afk: bool,
 };
