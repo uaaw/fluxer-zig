@@ -1,11 +1,13 @@
 const std = @import("std");
 const fluxer = @import("fluxer");
 
-// Basic bot example with typed event handlers and automatic reconnect support.
-// The EventDispatcher parses models before passing them to handlers.
+// Message-based bot example (recommended on Fluxer today).
+// Gateway Ready + heartbeat work; slash/application commands are not on Fluxer yet.
+// Load FLUXER_BOT_TOKEN from the environment — never hardcode or commit tokens.
 
 const MyHandler = struct {
     allocator: std.mem.Allocator,
+    client: *fluxer.Client,
 
     pub const EventHandlerVTable = fluxer.gateway.EventHandler.VTable{
         .onReady = onReady,
@@ -56,21 +58,40 @@ const MyHandler = struct {
     };
 
     pub fn onReady(ptr: *anyopaque, payload: fluxer.gateway.ReadyPayload) void {
-        const self: *MyHandler = @ptrCast(@alignCast(ptr));
-        _ = self;
+        _ = ptr;
         std.log.info("Ready! Logged in as {s}, session {s}", .{
             payload.user.username,
             payload.session_id,
         });
+        std.log.info("Message path: send \"ping\" or \"!ping\" (case-insensitive) for pong", .{});
     }
 
     pub fn onMessageCreate(ptr: *anyopaque, payload: fluxer.models.Message) void {
         const self: *MyHandler = @ptrCast(@alignCast(ptr));
-        _ = self;
-        std.log.info("Message from {s}: {s}", .{
+
+        // Avoid reply loops from ourselves / other bots.
+        if (payload.author.bot) return;
+
+        const trimmed = std.mem.trim(u8, payload.content, " \t\r\n");
+        if (!isPingTrigger(trimmed)) return;
+
+        std.log.info("Message ping from {s} in channel {d}", .{
             payload.author.username,
-            payload.content,
+            payload.channel_id.toU64(),
         });
+
+        const sent = self.client.createMessage(payload.channel_id, "pong") catch |err| {
+            std.log.err("Failed to reply pong: {s}", .{@errorName(err)});
+            return;
+        };
+        defer sent.deinit();
+        std.log.info("Replied pong", .{});
+    }
+
+    fn isPingTrigger(content: []const u8) bool {
+        if (std.ascii.eqlIgnoreCase(content, "ping")) return true;
+        if (std.ascii.eqlIgnoreCase(content, "!ping")) return true;
+        return false;
     }
 
     fn noopMessage(ptr: *anyopaque, payload: fluxer.models.Message) void {
@@ -123,36 +144,126 @@ const MyHandler = struct {
         _ = response;
     }
 
-    fn noopReactionAdd(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionAddPayload) void { _ = ptr; _ = payload; }
-    fn noopReactionRemove(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemovePayload) void { _ = ptr; _ = payload; }
-    fn noopReactionRemoveAll(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemoveAllPayload) void { _ = ptr; _ = payload; }
-    fn noopReactionRemoveEmoji(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemoveEmojiPayload) void { _ = ptr; _ = payload; }
-    fn noopMsgDeleteBulk(ptr: *anyopaque, payload: fluxer.gateway.MessageDeleteBulkPayload) void { _ = ptr; _ = payload; }
-    fn noopRoleCreate(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleCreatePayload) void { _ = ptr; _ = payload; }
-    fn noopRoleUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopRoleDelete(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleDeletePayload) void { _ = ptr; _ = payload; }
-    fn noopBanAdd(ptr: *anyopaque, payload: fluxer.gateway.GuildBanAddPayload) void { _ = ptr; _ = payload; }
-    fn noopBanRemove(ptr: *anyopaque, payload: fluxer.gateway.GuildBanRemovePayload) void { _ = ptr; _ = payload; }
-    fn noopTypingStart(ptr: *anyopaque, payload: fluxer.gateway.TypingStartPayload) void { _ = ptr; _ = payload; }
-    fn noopWebhooksUpdate(ptr: *anyopaque, payload: fluxer.gateway.WebhooksUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopInviteCreate(ptr: *anyopaque, payload: fluxer.gateway.InviteCreatePayload) void { _ = ptr; _ = payload; }
-    fn noopInviteDelete(ptr: *anyopaque, payload: fluxer.gateway.InviteDeletePayload) void { _ = ptr; _ = payload; }
-    fn noopVoiceStateUpdate(ptr: *anyopaque, payload: fluxer.gateway.VoiceStateUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopVoiceServerUpdate(ptr: *anyopaque, payload: fluxer.gateway.VoiceServerUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopPresenceUpdate(ptr: *anyopaque, payload: fluxer.gateway.PresenceUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopThreadCreate(ptr: *anyopaque, payload: fluxer.models.Channel) void { _ = ptr; _ = payload; }
-    fn noopThreadUpdate(ptr: *anyopaque, payload: fluxer.models.Channel) void { _ = ptr; _ = payload; }
-    fn noopThreadDelete(ptr: *anyopaque, payload: fluxer.models.Channel) void { _ = ptr; _ = payload; }
-    fn noopThreadListSync(ptr: *anyopaque, payload: fluxer.gateway.ThreadListSyncPayload) void { _ = ptr; _ = payload; }
-    fn noopThreadMemberUpdate(ptr: *anyopaque, payload: fluxer.gateway.ThreadMember) void { _ = ptr; _ = payload; }
-    fn noopThreadMembersUpdate(ptr: *anyopaque, payload: fluxer.gateway.ThreadMembersUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopUserUpdate(ptr: *anyopaque, payload: fluxer.gateway.UserUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopPinsUpdate(ptr: *anyopaque, payload: fluxer.gateway.ChannelPinsUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopEmojisUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildEmojisUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopStickersUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildStickersUpdatePayload) void { _ = ptr; _ = payload; }
-    fn noopRoleUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleUpdateBulkPayload) void { _ = ptr; _ = payload; }
-    fn noopChannelUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.ChannelUpdateBulkPayload) void { _ = ptr; _ = payload; }
-    fn noopInteraction(ptr: *anyopaque, payload: fluxer.models.Interaction) void { _ = ptr; _ = payload; }
+    fn noopReactionAdd(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionAddPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopReactionRemove(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemovePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopReactionRemoveAll(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemoveAllPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopReactionRemoveEmoji(ptr: *anyopaque, payload: fluxer.gateway.MessageReactionRemoveEmojiPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopMsgDeleteBulk(ptr: *anyopaque, payload: fluxer.gateway.MessageDeleteBulkPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopRoleCreate(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleCreatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopRoleUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopRoleDelete(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleDeletePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopBanAdd(ptr: *anyopaque, payload: fluxer.gateway.GuildBanAddPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopBanRemove(ptr: *anyopaque, payload: fluxer.gateway.GuildBanRemovePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopTypingStart(ptr: *anyopaque, payload: fluxer.gateway.TypingStartPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopWebhooksUpdate(ptr: *anyopaque, payload: fluxer.gateway.WebhooksUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopInviteCreate(ptr: *anyopaque, payload: fluxer.gateway.InviteCreatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopInviteDelete(ptr: *anyopaque, payload: fluxer.gateway.InviteDeletePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopVoiceStateUpdate(ptr: *anyopaque, payload: fluxer.gateway.VoiceStateUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopVoiceServerUpdate(ptr: *anyopaque, payload: fluxer.gateway.VoiceServerUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopPresenceUpdate(ptr: *anyopaque, payload: fluxer.gateway.PresenceUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadCreate(ptr: *anyopaque, payload: fluxer.models.Channel) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadUpdate(ptr: *anyopaque, payload: fluxer.models.Channel) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadDelete(ptr: *anyopaque, payload: fluxer.models.Channel) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadListSync(ptr: *anyopaque, payload: fluxer.gateway.ThreadListSyncPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadMemberUpdate(ptr: *anyopaque, payload: fluxer.gateway.ThreadMember) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopThreadMembersUpdate(ptr: *anyopaque, payload: fluxer.gateway.ThreadMembersUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopUserUpdate(ptr: *anyopaque, payload: fluxer.gateway.UserUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopPinsUpdate(ptr: *anyopaque, payload: fluxer.gateway.ChannelPinsUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopEmojisUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildEmojisUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopStickersUpdate(ptr: *anyopaque, payload: fluxer.gateway.GuildStickersUpdatePayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopRoleUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.GuildRoleUpdateBulkPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopChannelUpdateBulk(ptr: *anyopaque, payload: fluxer.gateway.ChannelUpdateBulkPayload) void {
+        _ = ptr;
+        _ = payload;
+    }
+    fn noopInteraction(ptr: *anyopaque, payload: fluxer.models.Interaction) void {
+        _ = ptr;
+        _ = payload;
+    }
 };
 
 pub fn main() !void {
@@ -160,25 +271,45 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Client initialization with cache enabled
+    const token = std.process.getEnvVarOwned(allocator, "FLUXER_BOT_TOKEN") catch |err| {
+        std.log.err(
+            "FLUXER_BOT_TOKEN is not set ({s}). Export your bot token, e.g.: export FLUXER_BOT_TOKEN=...",
+            .{@errorName(err)},
+        );
+        return error.MissingBotToken;
+    };
+    defer allocator.free(token);
+
+    if (token.len == 0) {
+        std.log.err("FLUXER_BOT_TOKEN is empty. Set a non-empty bot token before running.", .{});
+        return error.MissingBotToken;
+    }
+
+    // guilds + guildMessages + messageContent so MESSAGE_CREATE includes content
+    // when the platform treats content as privileged.
+    const intents = fluxer.gateway.Intents.guilds()
+        .combine(fluxer.gateway.Intents.guildMessages())
+        .combine(fluxer.gateway.Intents.messageContent());
+
     var client = try fluxer.Client.init(allocator, .{
-        .token = "YOUR_BOT_TOKEN",
-        .intents = fluxer.gateway.Intents.guildMessages().combine(fluxer.gateway.Intents.guilds()).value,
+        .token = token,
+        .auth_type = .Bot,
+        .intents = intents.value,
         .cache = .{ .enabled = true },
     });
     defer client.deinit();
 
-    // Event handler setup
-    var handler = MyHandler{ .allocator = allocator };
+    var handler = MyHandler{
+        .allocator = allocator,
+        .client = &client,
+    };
     const eh = fluxer.gateway.EventHandler{
         .ptr = &handler,
         .vtable = &MyHandler.EventHandlerVTable,
     };
 
-    // Gateway connection with automatic reconnect support
     try client.connect(eh, &handler);
 
-    // Set initial presence to online with a "Playing fluxer-zig" activity
     const activities = [_]fluxer.gateway.Activity{
         .{ .name = "fluxer-zig", .type = .game },
     };
@@ -186,9 +317,8 @@ pub fn main() !void {
         std.log.warn("Failed to set initial presence: {s}", .{@errorName(err)});
     };
 
-    // Run for 60 seconds
+    // Keep the process alive so Gateway heartbeats and message handlers run.
     std.time.sleep(std.time.ns_per_s * 60);
 
-    // Disconnect
     client.disconnect();
 }

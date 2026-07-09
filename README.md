@@ -74,6 +74,8 @@ pub fn build(b: *std.Build) void {
 
 ## Quick Start
 
+Load the bot token from the environment (`FLUXER_BOT_TOKEN`) for local experiments — never hardcode or commit tokens. For a full message-reply bot (recommended on Fluxer today), see [`example/basic_bot.zig`](example/basic_bot.zig).
+
 ```zig
 const std = @import("std");
 const fluxer = @import("fluxer");
@@ -363,9 +365,31 @@ defer sm.stopAll();
 > This library is in early development. The API may change between versions.
 > See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+## Fluxer live status
+
+Verified against a real Fluxer bot token (local experiments only):
+
+| Area | Status |
+|------|--------|
+| Gateway (Ready + heartbeat) | Works |
+| REST (`createMessage`, etc.) | Works for supported routes |
+| Application slash commands (`/applications/{id}/commands`) | **Not implemented on Fluxer yet** (official docs; `createGlobalCommand` returns 404) |
+
+**Recommended bot pattern today:** listen for `MESSAGE_CREATE` and reply with `Client.createMessage` (e.g. reply `pong` to `ping` / `!ping`). See [`example/basic_bot.zig`](example/basic_bot.zig).
+
+For local runs, set a bot token in the environment and never commit it:
+
+```bash
+export FLUXER_BOT_TOKEN="your_bot_token_here"
+# never commit tokens, .env files with secrets, or token logs
+```
+
+The `why-error/` directory is a local sandbox (gitignored). It is not part of the published package.
+
 ## Known Limitations
 
 - **Gateway TLS (wss://) is now supported (beta).** `Shard.connect()` uses `std.crypto.tls.Client` with the OS CA bundle for TLS handshake. Certificate verification is enabled by default; if the OS CA bundle cannot be scanned, the handshake may fail on TLS-only endpoints.
+- **Slash / application commands are not available on Fluxer yet.** Library helpers such as `createGlobalCommand` are ready for Discord-style routes, but Fluxer does not expose them; prefer the message-based pattern above until the platform adds support.
 
 ## Contributing
 

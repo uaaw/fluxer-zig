@@ -72,6 +72,8 @@ pub fn build(b: *std.Build) void {
 
 ## クイックスタート
 
+ローカル実験では環境変数 `FLUXER_BOT_TOKEN` からBotトークンを読み込んでください（ハードコードやコミットは禁止）。Fluxer で今すぐ使えるメッセージ返信Botの例は [`example/basic_bot.zig`](example/basic_bot.zig) を参照してください。
+
 ```zig
 const std = @import("std");
 const fluxer = @import("fluxer");
@@ -362,9 +364,31 @@ defer sm.stopAll();
 > このライブラリは初期開発段階です。バージョン間でAPIが変更される可能性があります。
 > 変更履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
+## Fluxer ライブ状況
+
+実Botトークンでの検証結果（ローカル実験のみ）:
+
+| 領域 | 状況 |
+|------|------|
+| Gateway（Ready + heartbeat） | 動作する |
+| REST（`createMessage` など） | 対応ルートは動作する |
+| アプリケーションスラッシュコマンド（`/applications/{id}/commands`） | **Fluxer側では未実装**（公式ドキュメントどおり。`createGlobalCommand` は 404） |
+
+**現状おすすめのBotパターン:** `MESSAGE_CREATE` を受け取り `Client.createMessage` で返信する（例: `ping` / `!ping` に `pong`）。[`example/basic_bot.zig`](example/basic_bot.zig) を参照。
+
+ローカル実行時は環境変数でトークンを渡し、コミットしないでください:
+
+```bash
+export FLUXER_BOT_TOKEN="your_bot_token_here"
+# トークン・秘密情報入り .env・トークンログは絶対にコミットしない
+```
+
+`why-error/` はローカル用サンドボックス（gitignore済み）で、公開パッケージには含まれません。
+
 ## 既知の制限事項
 
 - **Gateway接続のTLS（wss://）に対応しました（ベータ）。** `Shard.connect()` は `std.crypto.tls.Client` を使用し、OSのCAバンドルを読み込んでTLSハンドシェイクを行います。証明書検証はデフォルトで有効です。OSのCAバンドルが読み込めない場合、TLS必須のエンドポイントでは接続に失敗する可能性があります。
+- **スラッシュ / アプリケーションコマンドは Fluxer 側でまだ使えません。** `createGlobalCommand` などライブラリ側のヘルパーは Discord 互換ルート向けに用意されていますが、Fluxer が公開していないため、プラットフォーム対応までは上記のメッセージベース方式を使ってください。
 
 ## 貢献方法
 

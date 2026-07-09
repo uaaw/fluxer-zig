@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- REST: avoid `HeaderMap` double-free on non-success HTTP responses (error paths previously ran both `response.deinit()` and `errdefer headers.deinit()`, freeing entries twice under safety allocators)
+- REST: own rate-limit route keys so temporary path buffers remain valid after request setup
+
+### Changed
+
+- Docs/examples: recommend message-based bots on Fluxer (`MESSAGE_CREATE` + `createMessage`); application slash commands are not implemented on Fluxer yet (`createGlobalCommand` returns 404)
+- `example/basic_bot.zig`: load `FLUXER_BOT_TOKEN` from the environment and reply to `ping` / `!ping` with `pong` (no slash registration)
+
 ## [0.0.1]
 
 ### Added
