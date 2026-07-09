@@ -8,11 +8,15 @@ pub const Response = struct {
     body: []const u8,
     allocator: std.mem.Allocator,
 
-    /// Allocates memory. Caller owns the returned `std.json.Parsed(T)` and must call `deinit()`.
-    /// Deserializes the response body as JSON into type T. String slices inside T remain
-    /// valid only for the lifetime of the returned Parsed value.
+    /// Deserializes the response body as JSON into type T.
+    /// Caller owns the returned `std.json.Parsed(T)` and must call `deinit()`.
+    /// Uses `.allocate = .alloc_always` so string slices are owned by the Parsed arena
+    /// and remain valid until `parsed.deinit()`, even if this Response is deinited first.
     pub fn json(self: Response, comptime T: type) !std.json.Parsed(T) {
-        return std.json.parseFromSlice(T, self.allocator, self.body, .{ .ignore_unknown_fields = true });
+        return std.json.parseFromSlice(T, self.allocator, self.body, .{
+            .ignore_unknown_fields = true,
+            .allocate = .alloc_always,
+        });
     }
 
     /// Returns the raw response body.
@@ -88,9 +92,11 @@ test "Response json parsing" {
     try std.testing.expectEqualStrings("test", parsed.value.name);
 }
 
-// Would fail under the old UAF pattern (return T after parsed.deinit()): poison-on-free
-// overwrites string bytes so expectEqualStrings would not match.
-test "Response json string fields remain valid until Parsed deinit" {
+// Real regression: free Response (body) before reading Parsed string fields.
+// Requires .allocate = .alloc_always and returning Parsed without early deinit.
+// Old return-T-after-Parsed.deinit() poisons name (0xDE) under PoisonAllocator.
+// Without alloc_always, name would point into freed body and also fail after response.deinit().
+test "Response json string fields outlive Response body" {
     var poison = PoisonAllocator{ .parent = std.testing.allocator };
     const allocator = poison.allocator();
 
@@ -111,12 +117,12 @@ test "Response json string fields remain valid until Parsed deinit" {
         .body = body,
         .allocator = allocator,
     };
-    defer response.deinit();
 
-    // Old bug: parseFromSlice + defer parsed.deinit() + return parsed.value
-    // would free (and poison) name before the caller could use it.
     const parsed = try response.json(TestData);
     defer parsed.deinit();
+
+    // Body/header storage gone; strings must still be owned by Parsed.
+    response.deinit();
 
     try std.testing.expectEqual(@as(u64, 1), parsed.value.id);
     try std.testing.expectEqualStrings("must_survive", parsed.value.name);
