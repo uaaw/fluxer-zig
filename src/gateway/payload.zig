@@ -19,6 +19,11 @@ pub const GatewayOpcode = enum(u8) {
     // opcode 13 is reserved / unused in fluxer.
     /// Fluxer-specific: lazy-load guild data (send-only).
     lazy_request = 14,
+
+    /// Wire format requires numeric opcodes (e.g. {"op":1}), not tag names.
+    pub fn jsonStringify(self: GatewayOpcode, jw: anytype) !void {
+        try jw.write(@intFromEnum(self));
+    }
 };
 
 /// Top-level gateway payload envelope.
@@ -158,4 +163,28 @@ test "identify body serialization" {
     };
     try std.testing.expectEqualStrings("test_token", body.token);
     try std.testing.expectEqualStrings("linux", body.properties.os);
+}
+
+test "gateway heartbeat payload op serializes as integer" {
+    const allocator = std.testing.allocator;
+    const gp = GatewayPayload{
+        .op = .heartbeat,
+        .d = std.json.Value{ .null = {} },
+    };
+    const json = try std.json.stringifyAlloc(allocator, gp, .{});
+    defer allocator.free(json);
+
+    // Must be numeric op, never the tag string "heartbeat".
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"op\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"op\":\"heartbeat\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "heartbeat") == null);
+}
+
+test "gateway identify opcode serializes as integer via GatewayPayload" {
+    const allocator = std.testing.allocator;
+    const gp = GatewayPayload{ .op = .identify };
+    const json = try std.json.stringifyAlloc(allocator, gp, .{});
+    defer allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"op\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "identify") == null);
 }

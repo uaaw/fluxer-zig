@@ -135,6 +135,11 @@ pub const InteractionCallbackType = enum(u8) {
     UpdateMessage = 7,
     ApplicationCommandAutocompleteResult = 8,
     Modal = 9,
+
+    /// Wire format requires numeric type (e.g. {"type":4}), not tag names.
+    pub fn jsonStringify(self: InteractionCallbackType, jw: anytype) !void {
+        try jw.write(@intFromEnum(self));
+    }
 };
 
 /// Data for an interaction callback.
@@ -154,3 +159,26 @@ pub const InteractionResponse = struct {
     type: InteractionCallbackType,
     data: ?InteractionCallbackData = null,
 };
+
+test "interaction response type serializes as integer" {
+    const allocator = std.testing.allocator;
+    const response = InteractionResponse{
+        .type = .ChannelMessageWithSource,
+        .data = .{ .content = "pong" },
+    };
+    const json = try std.json.stringifyAlloc(allocator, response, .{});
+    defer allocator.free(json);
+
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"type\":4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "ChannelMessageWithSource") == null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"content\":\"pong\"") != null);
+}
+
+test "interaction callback type pong serializes as 1" {
+    const allocator = std.testing.allocator;
+    const response = InteractionResponse{ .type = .Pong };
+    const json = try std.json.stringifyAlloc(allocator, response, .{});
+    defer allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"type\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "Pong") == null);
+}
