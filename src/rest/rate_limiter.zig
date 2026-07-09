@@ -28,8 +28,22 @@ pub const RateLimiter = struct {
         var it = self.buckets.iterator();
         while (it.next()) |entry| {
             entry.value_ptr.deinit();
+            self.allocator.free(entry.key_ptr.*);
         }
         self.buckets.deinit();
+    }
+
+    /// Ensures a bucket exists for `route`, owning a duplicated key.
+    fn ensureBucket(self: *RateLimiter, route: []const u8) !*Bucket {
+        const gop = try self.buckets.getOrPut(route);
+        if (!gop.found_existing) {
+            // StringArrayHashMap stores the provided key slice; caller routes are often
+            // temporary path buffers, so always own a copy.
+            errdefer _ = self.buckets.swapRemove(route);
+            gop.key_ptr.* = try self.allocator.dupe(u8, route);
+            gop.value_ptr.* = Bucket.init(self.allocator);
+        }
+        return gop.value_ptr;
     }
 
     /// Waits for both bucket and global rate limits, then atomically decrements.
@@ -37,12 +51,9 @@ pub const RateLimiter = struct {
     pub fn waitForRateLimit(self: *RateLimiter, route: []const u8) !void {
         while (true) {
             self.mutex.lock();
-            const bucket = self.buckets.getPtr(route) orelse blk: {
-                const result = try self.buckets.getOrPut(route);
-                if (!result.found_existing) {
-                    result.value_ptr.* = Bucket.init(self.allocator);
-                }
-                break :blk result.value_ptr;
+            const bucket = self.ensureBucket(route) catch |err| {
+                self.mutex.unlock();
+                return err;
             };
             const can_exec = bucket.canExecute();
             self.mutex.unlock();
@@ -74,15 +85,9 @@ pub const RateLimiter = struct {
         execute_fn: *const fn () anyerror!Response,
     ) !Response {
         self.mutex.lock();
-        const bucket = self.buckets.getPtr(route) orelse blk: {
-            const result = self.buckets.getOrPut(route) catch |err| {
-                self.mutex.unlock();
-                return err;
-            };
-            if (!result.found_existing) {
-                result.value_ptr.* = Bucket.init(self.allocator);
-            }
-            break :blk result.value_ptr;
+        const bucket = self.ensureBucket(route) catch |err| {
+            self.mutex.unlock();
+            return err;
         };
         self.mutex.unlock();
 
@@ -212,4 +217,22 @@ test "RateLimiter global limit" {
     limiter.global_remaining = 0;
     limiter.global_reset = std.time.timestamp() - 1;
     try std.testing.expectEqual(@as(u32, 50), limiter.globalLimitRemaining());
+}
+
+// Regression: routes are often temporary path buffers freed after the request.
+// Bucket map keys must be owned copies so later lookups/deinit stay valid.
+test "RateLimiter owns route key after temporary path freed" {
+    const allocator = std.testing.allocator;
+    var limiter = RateLimiter.init(allocator);
+    defer limiter.deinit();
+
+    {
+        const temp_path = try std.fmt.allocPrint(allocator, "/applications/{d}/commands", .{123456789012345678});
+        defer allocator.free(temp_path);
+        try limiter.waitForRateLimit(temp_path);
+    }
+
+    // temp_path is freed; key must still be reachable and freeable via deinit.
+    const state = limiter.bucketState("/applications/123456789012345678/commands");
+    try std.testing.expect(state != null);
 }

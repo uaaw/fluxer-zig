@@ -133,12 +133,18 @@ pub const HttpClient = struct {
         errdefer response_body.deinit();
         try req.reader().readAllArrayList(&response_body, 10 * 1024 * 1024);
 
+        // Ownership notes:
+        // - parseHeaders allocates name/value copies into HeaderMap.
+        // - body_slice is owned by Response after toOwnedSlice.
+        // - On non-success status we must deinit the Response exactly once.
+        // - Do NOT pair `errdefer headers.deinit()` with `return error` after
+        //   headers were moved into Response (that double-frees HeaderMap entries
+        //   and panics GPA/safety allocators with free of 0xaa poison).
         var headers = try parseHeaders(self.allocator, req.response.parser.get());
-        errdefer {
+        const body_slice = response_body.toOwnedSlice() catch |err| {
             headers.deinit();
-        }
-
-        const body_slice = try response_body.toOwnedSlice();
+            return err;
+        };
 
         var response = Response{
             .status = req.response.status,
@@ -150,8 +156,10 @@ pub const HttpClient = struct {
         self.rate_limiter.updateFromResponse(path, response);
 
         if (req.response.status.class() != .success and req.response.status.class() != .redirect) {
-            defer response.deinit();
-            return fromStatus(req.response.status, body_slice);
+            const status = req.response.status;
+            // Single owner cleanup; fromStatus does not retain body.
+            response.deinit();
+            return fromStatus(status, null);
         }
 
         return response;
@@ -222,4 +230,45 @@ test "RequestOptions construction" {
     try std.testing.expect(opts.headers == null);
     try std.testing.expect(opts.body == null);
     try std.testing.expect(opts.query == null);
+}
+
+// Regression: error status must free Response exactly once.
+// Old code used errdefer headers.deinit() plus defer response.deinit() on
+// return fromStatus(...), which double-freed HeaderMap entries (GPA 0xaa crash).
+test "error response cleanup frees headers once" {
+    const allocator = std.testing.allocator;
+
+    var headers = HeaderMap.init(allocator);
+    try headers.put("content-type", "application/json");
+    try headers.put("x-ratelimit-remaining", "1");
+    const body = try allocator.dupe(u8, "{\"code\":\"NOT_FOUND\",\"message\":\"Not found.\"}");
+
+    var response = Response{
+        .status = .not_found,
+        .headers = headers,
+        .body = body,
+        .allocator = allocator,
+    };
+
+    // Mirrors fixed HttpClient.request non-success path: single deinit then map status.
+    const status = response.status;
+    response.deinit();
+    const err = fromStatus(status, null);
+    try std.testing.expectEqual(RestError.NotFound, err);
+}
+
+// Ensures parseHeaders owns independent copies of name/value so raw buffer can die.
+test "parseHeaders owns independent copies" {
+    const allocator = std.testing.allocator;
+    const raw_buf = try allocator.dupe(u8, "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nX-Test: value\r\n\r\n");
+    defer allocator.free(raw_buf);
+
+    var map = try parseHeaders(allocator, raw_buf);
+    defer map.deinit();
+
+    // Poison the raw buffer; HeaderMap must not alias it.
+    @memset(raw_buf, 0xAA);
+
+    try std.testing.expectEqualStrings("application/json", map.get("Content-Type").?);
+    try std.testing.expectEqualStrings("value", map.get("X-Test").?);
 }
