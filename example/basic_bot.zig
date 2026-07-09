@@ -1,9 +1,12 @@
 const std = @import("std");
 const fluxer = @import("fluxer");
 
-// Message-based bot example (recommended on Fluxer today).
+// Prefix-command bot example (recommended on Fluxer today).
 // Gateway Ready + heartbeat work; slash/application commands are not on Fluxer yet.
 // Load FLUXER_BOT_TOKEN from the environment — never hardcode or commit tokens.
+
+/// Command prefix. Messages must start with this (after trim) to be treated as commands.
+const COMMAND_PREFIX = "!";
 
 const MyHandler = struct {
     allocator: std.mem.Allocator,
@@ -63,7 +66,11 @@ const MyHandler = struct {
             payload.user.username,
             payload.session_id,
         });
-        std.log.info("Message path: send \"ping\" or \"!ping\" (case-insensitive) for pong", .{});
+        std.log.info("Prefix commands ({s}): {s}ping [args...], {s}help", .{
+            COMMAND_PREFIX,
+            COMMAND_PREFIX,
+            COMMAND_PREFIX,
+        });
     }
 
     pub fn onMessageCreate(ptr: *anyopaque, payload: fluxer.models.Message) void {
@@ -73,25 +80,51 @@ const MyHandler = struct {
         if (payload.author.bot) return;
 
         const trimmed = std.mem.trim(u8, payload.content, " \t\r\n");
-        if (!isPingTrigger(trimmed)) return;
+        const parsed = parsePrefixCommand(trimmed, COMMAND_PREFIX) orelse return;
 
-        std.log.info("Message ping from {s} in channel {d}", .{
-            payload.author.username,
-            payload.channel_id.toU64(),
-        });
+        if (std.ascii.eqlIgnoreCase(parsed.name, "ping")) {
+            std.log.info("Command ping (args={s}) from {s} in channel {d}", .{
+                parsed.args,
+                payload.author.username,
+                payload.channel_id.toU64(),
+            });
+            reply(self, payload.channel_id, "pong");
+            return;
+        }
 
-        const sent = self.client.createMessage(payload.channel_id, "pong") catch |err| {
-            std.log.err("Failed to reply pong: {s}", .{@errorName(err)});
+        if (std.ascii.eqlIgnoreCase(parsed.name, "help")) {
+            std.log.info("Command help from {s} in channel {d}", .{
+                payload.author.username,
+                payload.channel_id.toU64(),
+            });
+            reply(self, payload.channel_id, "Commands: !ping [args...] → pong; !help → this text");
+            return;
+        }
+    }
+
+    fn reply(self: *MyHandler, channel_id: fluxer.models.Snowflake, content: []const u8) void {
+        const sent = self.client.createMessage(channel_id, content) catch |err| {
+            std.log.err("Failed to send reply: {s}", .{@errorName(err)});
             return;
         };
         defer sent.deinit();
-        std.log.info("Replied pong", .{});
+        std.log.info("Replied: {s}", .{content});
     }
 
-    fn isPingTrigger(content: []const u8) bool {
-        if (std.ascii.eqlIgnoreCase(content, "ping")) return true;
-        if (std.ascii.eqlIgnoreCase(content, "!ping")) return true;
-        return false;
+    /// True prefix parse: `{prefix}{name}[ {args...}]`.
+    /// Returns null if content does not start with prefix or name is empty.
+    fn parsePrefixCommand(content: []const u8, prefix: []const u8) ?struct { name: []const u8, args: []const u8 } {
+        if (!std.mem.startsWith(u8, content, prefix)) return null;
+        const rest = content[prefix.len..];
+        if (rest.len == 0) return null;
+
+        const name_end = std.mem.indexOfAny(u8, rest, " \t") orelse rest.len;
+        const name = rest[0..name_end];
+        if (name.len == 0) return null;
+
+        const after_name = rest[name_end..];
+        const args = std.mem.trimLeft(u8, after_name, " \t");
+        return .{ .name = name, .args = args };
     }
 
     fn noopMessage(ptr: *anyopaque, payload: fluxer.models.Message) void {
@@ -318,6 +351,7 @@ pub fn main() !void {
     };
 
     // Keep the process alive so Gateway heartbeats and message handlers run.
+    // Prefer connect + keep-alive over Client.run() (reconnect loop is incomplete).
     std.time.sleep(std.time.ns_per_s * 60);
 
     client.disconnect();

@@ -72,7 +72,7 @@ pub fn build(b: *std.Build) void {
 
 ## クイックスタート
 
-ローカル実験では環境変数 `FLUXER_BOT_TOKEN` からBotトークンを読み込んでください（ハードコードやコミットは禁止）。Fluxer で今すぐ使えるメッセージ返信Botの例は [`example/basic_bot.zig`](example/basic_bot.zig) を参照してください。
+ローカル実験では環境変数 `FLUXER_BOT_TOKEN` からBotトークンを読み込んでください（ハードコードやコミットは禁止）。Fluxer で今すぐ使える **プレフィックスコマンド** Bot の例（`!ping` / `!help`）は [`example/basic_bot.zig`](example/basic_bot.zig) を参照してください。
 
 ```zig
 const std = @import("std");
@@ -374,13 +374,15 @@ defer sm.stopAll();
 | REST（`createMessage` など） | 対応ルートは動作する |
 | アプリケーションスラッシュコマンド（`/applications/{id}/commands`） | **Fluxer側では未実装**（公式ドキュメントどおり。`createGlobalCommand` は 404） |
 
-**現状おすすめのBotパターン:** `MESSAGE_CREATE` を受け取り `Client.createMessage` で返信する（例: `ping` / `!ping` に `pong`）。[`example/basic_bot.zig`](example/basic_bot.zig) を参照。
+**現状おすすめのBotパターン:** スラッシュではなく **プレフィックスコマンド**。`MESSAGE_CREATE` で `{prefix}{command}[ args...]` を解析し（デモの prefix は `"!"`）、Bot作者は無視、`Client.createMessage` で返信。例: `!ping` / `!ping hello` → `pong`、`!help` → 短いヘルプ。[`example/basic_bot.zig`](example/basic_bot.zig) を参照。
 
 ローカル実行時は環境変数でトークンを渡し、コミットしないでください:
 
 ```bash
 export FLUXER_BOT_TOKEN="your_bot_token_here"
 # トークン・秘密情報入り .env・トークンログは絶対にコミットしない
+zig build examples
+# ビルドした basic_bot バイナリを FLUXER_BOT_TOKEN を設定して実行
 ```
 
 `why-error/` はローカル用サンドボックス（gitignore済み）で、公開パッケージには含まれません。
@@ -388,7 +390,7 @@ export FLUXER_BOT_TOKEN="your_bot_token_here"
 ## 既知の制限事項
 
 - **Gateway接続のTLS（wss://）に対応しました（ベータ）。** `Shard.connect()` は `std.crypto.tls.Client` を使用し、OSのCAバンドルを読み込んでTLSハンドシェイクを行います。証明書検証はデフォルトで有効です。OSのCAバンドルが読み込めない場合、TLS必須のエンドポイントでは接続に失敗する可能性があります。
-- **スラッシュ / アプリケーションコマンドは Fluxer 側でまだ使えません。** `createGlobalCommand` などライブラリ側のヘルパーは Discord 互換ルート向けに用意されていますが、Fluxer が公開していないため、プラットフォーム対応までは上記のメッセージベース方式を使ってください。
+- **スラッシュ / アプリケーションコマンドは Fluxer 側でまだ使えません。** `createGlobalCommand` などライブラリ側のヘルパーは Discord 互換ルート向けに用意されていますが、Fluxer が公開していないため、プラットフォーム対応までは **プレフィックスコマンド**（`!ping` など）を `MESSAGE_CREATE` で処理してください。
 
 ## 貢献方法
 

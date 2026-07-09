@@ -13,8 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Docs/examples: recommend message-based bots on Fluxer (`MESSAGE_CREATE` + `createMessage`); application slash commands are not implemented on Fluxer yet (`createGlobalCommand` returns 404)
-- `example/basic_bot.zig`: load `FLUXER_BOT_TOKEN` from the environment and reply to `ping` / `!ping` with `pong` (no slash registration)
+- Docs/examples: recommend **prefix commands** on Fluxer (`MESSAGE_CREATE` + `createMessage`); application slash commands are not implemented on Fluxer yet (`createGlobalCommand` returns 404)
+- `example/basic_bot.zig`: true prefix routing with documented `COMMAND_PREFIX = "!"` — `!ping` / `!ping args` → `pong`, `!help` → short help; ignores bot authors; `FLUXER_BOT_TOKEN` only; `connect` + keep-alive (not `Client.run`)
 
 ## [0.0.1]
 
