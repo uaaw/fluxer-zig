@@ -94,13 +94,16 @@ test "ShardManager getShard calculation" {
     try std.testing.expectEqual(expected_id, shard.id);
 }
 
-test "ShardManager startAll and stopAll" {
+// Unit tests stay offline: do not call startAll() here (it spawns Shard.connect / real network).
+test "ShardManager stopAll is safe while disconnected" {
     const allocator = std.testing.allocator;
     var manager = try ShardManager.init(allocator, 2, "test_token", 0);
     defer manager.deinit();
 
-    try manager.startAll();
-    std.time.sleep(50 * std.time.ns_per_ms);
+    for (manager.shards) |shard| {
+        try std.testing.expectEqual(ShardStatus.disconnected, shard.status);
+    }
+
     manager.stopAll();
 
     for (manager.shards) |shard| {
