@@ -62,7 +62,7 @@ const MyHandler = struct {
     };
 
     pub fn onReady(ptr: *anyopaque, payload: fluxer.gateway.ReadyPayload) void {
-        _ = ptr;
+        const self: *MyHandler = @ptrCast(@alignCast(ptr));
         std.log.info("Ready! Logged in as {s}, session {s}", .{
             payload.user.username,
             payload.session_id,
@@ -72,6 +72,13 @@ const MyHandler = struct {
             COMMAND_PREFIX,
             COMMAND_PREFIX,
         });
+        // Presence must be sent only after READY (not right after connect/upgrade).
+        const activities = [_]fluxer.gateway.Activity{
+            .{ .name = "fluxer-zig", .type = .game },
+        };
+        self.client.updatePresence(.online, &activities, null, false) catch |err| {
+            std.log.warn("Failed to set presence on Ready: {s}", .{@errorName(err)});
+        };
     }
 
     pub fn onMessageCreate(ptr: *anyopaque, payload: fluxer.models.Message) void {
@@ -328,14 +335,8 @@ pub fn main() !void {
 
     try client.connect(eh, &handler);
 
-    const activities = [_]fluxer.gateway.Activity{
-        .{ .name = "fluxer-zig", .type = .game },
-    };
-    client.updatePresence(.online, &activities, null, false) catch |err| {
-        std.log.warn("Failed to set initial presence: {s}", .{@errorName(err)});
-    };
-
     // Keep the process alive so Gateway heartbeats and message handlers run.
+    // Presence is set from onReady (sending op 3 before IDENTIFY closes the gateway).
     // Prefer connect + keep-alive over Client.run() (reconnect loop is incomplete).
     std.time.sleep(std.time.ns_per_s * 60);
 

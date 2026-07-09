@@ -37,15 +37,19 @@ pub const ShardManager = struct {
     /// Releases all resources owned by the manager.
     pub fn deinit(self: *ShardManager) void {
         self.stopAll();
+        for (self.shards) |*shard| {
+            shard.deinit();
+        }
         self.allocator.free(self.shards);
         self.allocator.free(self.token);
     }
 
-    /// Starts all shards in parallel on separate threads.
+    /// Connects every shard. Each shard's receive/heartbeat loops run on
+    /// background threads; the TCP/TLS/WebSocket upgrade itself is awaited
+    /// so callers (e.g. presence updates) do not race an unfinished connect.
     pub fn startAll(self: *ShardManager) !void {
         for (self.shards) |*shard| {
-            const thread = try std.Thread.spawn(.{}, Shard.connect, .{shard});
-            thread.detach();
+            try shard.connect();
         }
     }
 

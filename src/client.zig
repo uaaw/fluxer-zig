@@ -133,7 +133,8 @@ pub const Client = struct {
     }
 
     /// Updates the bot's presence/status via the gateway.
-    /// Requires an active gateway connection. Sends to all shards.
+    /// Requires shards in the Ready state (after IDENTIFY). Sending presence
+    /// before READY can cause the gateway to close the session.
     pub fn updatePresence(self: *Client, status: gateway.Status, activities: []const gateway.Activity, since: ?u64, afk: bool) !void {
         const presence = gateway.PresenceUpdate{
             .since = since,
@@ -142,9 +143,13 @@ pub const Client = struct {
             .afk = afk,
         };
         if (self.shard_manager) |*sm| {
+            var any = false;
             for (sm.shards) |*shard| {
+                if (shard.status != .ready) continue;
                 try shard.updatePresence(presence);
+                any = true;
             }
+            if (!any) return error.NotReady;
         } else {
             return error.NotConnected;
         }

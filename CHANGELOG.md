@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Gateway: preserve WebSocket bytes that arrive with the HTTP 101 upgrade response (HELLO was discarded; receive loop hung forever)
+- Gateway: serialize TLS read/write on the shard mutex (`std.crypto.tls.Client` is not thread-safe)
+- Gateway: reply to server heartbeat requests (op 1) — missing replies caused close `4009 Heartbeat timeout`
+- Gateway: `ShardManager.startAll` awaits each shard connect (no detached race with presence/send)
+- Gateway: `ShardManager.deinit` calls `shard.deinit()` so `session_id` / pending buffers are freed
+- Client: `updatePresence` only sends on Ready shards (op 3 before IDENTIFY closes the session)
+- Gateway: redact identify/resume bodies in debug logs (tokens must not appear in logs)
 - REST: avoid `HeaderMap` double-free on non-success HTTP responses (error paths previously ran both `response.deinit()` and `errdefer headers.deinit()`, freeing entries twice under safety allocators)
 - REST: own rate-limit route keys so temporary path buffers remain valid after request setup
 

@@ -62,6 +62,10 @@ pub const Shard = struct {
     // Network state
     stream: ?std.net.Stream,
     tls_client: ?std.crypto.tls.Client,
+    // Bytes after HTTP 101 headers that belong to the WebSocket stream (e.g. HELLO).
+    // Must be drained before further TLS reads or the gateway appears silent.
+    ws_pending: []u8 = &.{},
+    ws_pending_pos: usize = 0,
     receive_thread: ?std.Thread,
     heartbeat_thread: ?std.Thread,
     running: std.atomic.Value(bool),
@@ -112,7 +116,57 @@ pub const Shard = struct {
             self.allocator.free(sid);
             self.session_id = null;
         }
+        self.clearWsPending();
     }
+
+    fn clearWsPending(self: *Shard) void {
+        if (self.ws_pending.len > 0) {
+            self.allocator.free(self.ws_pending);
+        }
+        self.ws_pending = &.{};
+        self.ws_pending_pos = 0;
+    }
+
+    fn setWsPending(self: *Shard, bytes: []const u8) !void {
+        self.clearWsPending();
+        if (bytes.len == 0) return;
+        const copy = try self.allocator.dupe(u8, bytes);
+        self.ws_pending = copy;
+        self.ws_pending_pos = 0;
+    }
+
+    /// Reads from upgrade leftover bytes first, then the TLS socket.
+    fn readWs(self: *Shard, buffer: []u8) !usize {
+        if (self.ws_pending_pos < self.ws_pending.len) {
+            const avail = self.ws_pending.len - self.ws_pending_pos;
+            const n = @min(avail, buffer.len);
+            @memcpy(buffer[0..n], self.ws_pending[self.ws_pending_pos .. self.ws_pending_pos + n]);
+            self.ws_pending_pos += n;
+            if (self.ws_pending_pos >= self.ws_pending.len) {
+                self.clearWsPending();
+            }
+            return n;
+        }
+        const stream = self.stream orelse return error.NotConnected;
+        if (self.tls_client) |*tls| {
+            return tls.read(stream, buffer);
+        }
+        return stream.read(buffer);
+    }
+
+    const WsByteReader = struct {
+        shard: *Shard,
+
+        fn read(self: *WsByteReader, buffer: []u8) anyerror!usize {
+            return self.shard.readWs(buffer);
+        }
+
+        const Reader = std.io.GenericReader(*WsByteReader, anyerror, read);
+
+        fn reader(self: *WsByteReader) Reader {
+            return .{ .context = self };
+        }
+    };
 
     /// Processes an incoming gateway payload.
     /// Handles fluxer-specific opcodes such as `GatewayError`.
@@ -154,6 +208,12 @@ pub const Shard = struct {
                 }
 
                 self.startHeartbeat();
+            },
+            .heartbeat => {
+                // Server requested an immediate heartbeat (op 1).
+                self.sendHeartbeatNow() catch |err| {
+                    if (!builtin.is_test) std.log.err("Failed to reply to heartbeat request: {s}", .{@errorName(err)});
+                };
             },
             .heartbeat_ack => {
                 // Server acknowledged our heartbeat.
@@ -273,10 +333,16 @@ pub const Shard = struct {
             return err;
         };
 
-        // Read HTTP response until \r\n\r\n via TLS
-        var resp_buf: [4096]u8 = undefined;
+        // Read HTTP response until \r\n\r\n via TLS. The same read may include the
+        // first WebSocket frame (HELLO); preserve those leftover bytes for receiveLoop.
+        var resp_buf: [8192]u8 = undefined;
         var resp_len: usize = 0;
+        var header_end: ?usize = null;
         while (resp_len < resp_buf.len) {
+            if (std.mem.indexOf(u8, resp_buf[0..resp_len], "\r\n\r\n")) |idx| {
+                header_end = idx + 4;
+                break;
+            }
             const n = tls_client.read(stream, resp_buf[resp_len..]) catch |err| {
                 stream.close();
                 self.status = .disconnected;
@@ -284,12 +350,19 @@ pub const Shard = struct {
             };
             if (n == 0) break;
             resp_len += n;
-            if (resp_len >= 4 and std.mem.eql(u8, resp_buf[resp_len - 4 .. resp_len], "\r\n\r\n")) {
-                break;
+        }
+        if (header_end == null) {
+            if (std.mem.indexOf(u8, resp_buf[0..resp_len], "\r\n\r\n")) |idx| {
+                header_end = idx + 4;
             }
         }
+        const headers_end = header_end orelse {
+            stream.close();
+            self.status = .disconnected;
+            return error.WebSocketUpgradeFailed;
+        };
 
-        if (!std.mem.startsWith(u8, resp_buf[0..resp_len], "HTTP/1.1 101")) {
+        if (!std.mem.startsWith(u8, resp_buf[0..headers_end], "HTTP/1.1 101")) {
             stream.close();
             self.status = .disconnected;
             return error.WebSocketUpgradeFailed;
@@ -306,11 +379,12 @@ pub const Shard = struct {
         const expected_str = std.base64.standard.Encoder.encode(&expected_accept, &accept_hash);
         // Extract Sec-WebSocket-Accept from response
         const accept_header = "Sec-WebSocket-Accept: ";
-        if (std.mem.indexOf(u8, resp_buf[0..resp_len], accept_header)) |idx| {
+        if (std.mem.indexOf(u8, resp_buf[0..headers_end], accept_header)) |idx| {
             const start = idx + accept_header.len;
-            const end = std.mem.indexOfScalarPos(u8, &resp_buf, start, '\r') orelse resp_len;
+            const end = std.mem.indexOfScalarPos(u8, resp_buf[0..headers_end], start, '\r') orelse headers_end;
             if (!std.mem.eql(u8, resp_buf[start..end], expected_str)) {
                 stream.close();
+                self.clearWsPending();
                 self.status = .disconnected;
                 return error.InvalidWebSocketAccept;
             }
@@ -318,6 +392,18 @@ pub const Shard = struct {
             stream.close();
             self.status = .disconnected;
             return error.MissingWebSocketAccept;
+        }
+
+        // Keep any WebSocket bytes that arrived with the HTTP upgrade response.
+        if (headers_end < resp_len) {
+            self.setWsPending(resp_buf[headers_end..resp_len]) catch |err| {
+                stream.close();
+                self.status = .disconnected;
+                return err;
+            };
+            if (!builtin.is_test) {
+                std.log.debug("websocket upgrade leftover bytes={d}", .{resp_len - headers_end});
+            }
         }
 
         self.stream = stream;
@@ -328,6 +414,7 @@ pub const Shard = struct {
             stream.close();
             self.stream = null;
             self.tls_client = null;
+            self.clearWsPending();
             self.status = .disconnected;
             return err;
         };
@@ -340,28 +427,46 @@ pub const Shard = struct {
     pub fn disconnect(self: *Shard) void {
         self.running.store(false, .monotonic);
 
+        // Unblock receiveLoop if it is parked in a TLS read while holding
+        // receive_mutex (closing/shutdown the fd wakes the reader).
+        if (self.stream) |s| {
+            std.posix.shutdown(s.handle, .both) catch {};
+        }
+
         if (self.heartbeat_thread) |t| {
             t.join();
             self.heartbeat_thread = null;
         }
 
-        self.receive_mutex.lock();
-        if (self.stream) |s| {
-            _ = sendCloseFrameNoLock(self) catch {};
-            if (self.tls_client) |*tls| {
-                _ = tls.writeAllEnd(s, &.{}, true) catch {};
-                self.tls_client = null;
+        // Best-effort graceful close when the mutex is free.
+        if (self.receive_mutex.tryLock()) {
+            if (self.stream) |s| {
+                _ = sendCloseFrameNoLock(self) catch {};
+                if (self.tls_client) |*tls| {
+                    _ = tls.writeAllEnd(s, &.{}, true) catch {};
+                    self.tls_client = null;
+                }
+                s.close();
+                self.stream = null;
             }
-            s.close();
-            self.stream = null;
+            self.receive_mutex.unlock();
         }
-        self.receive_mutex.unlock();
 
         if (self.receive_thread) |t| {
             t.join();
             self.receive_thread = null;
         }
 
+        // Final cleanup after receive thread has exited.
+        self.receive_mutex.lock();
+        if (self.stream) |s| {
+            s.close();
+            self.stream = null;
+        }
+        self.tls_client = null;
+        self.receive_mutex.unlock();
+
+        self.clearWsPending();
         self.status = .disconnected;
     }
 
@@ -414,9 +519,24 @@ pub const Shard = struct {
         try std.json.stringify(body, .{}, writer);
         try writer.writeAll("}");
         if (!builtin.is_test) {
-            std.log.debug("sendPayloadBody op={s} json={s}", .{ @tagName(op), buf.items });
+            // Never log full identify/resume bodies — they embed the bot token.
+            if (op == .identify or op == .resume_session) {
+                std.log.debug("sendPayloadBody op={s} json=[REDACTED]", .{@tagName(op)});
+            } else {
+                std.log.debug("sendPayloadBody op={s} json={s}", .{ @tagName(op), buf.items });
+            }
         }
         try self.sendRaw(buf.items);
+    }
+
+    /// Sends one heartbeat with the current sequence (gateway op 1).
+    pub fn sendHeartbeatNow(self: *Shard) !void {
+        const hb_payload = payload.GatewayPayload{
+            .op = .heartbeat,
+            .d = if (self.sequence) |seq| std.json.Value{ .integer = @intCast(seq) } else std.json.Value{ .null = {} },
+        };
+        try self.sendPayload(hb_payload);
+        self.hb.markSent(std.time.milliTimestamp());
     }
 
     /// Heartbeat loop. Runs in a dedicated thread.
@@ -432,11 +552,7 @@ pub const Shard = struct {
             }
 
             self.hb.last_ack = false;
-            const hb_payload = payload.GatewayPayload{
-                .op = .heartbeat,
-                .d = if (self.sequence) |seq| std.json.Value{ .integer = @intCast(seq) } else std.json.Value{ .null = {} },
-            };
-            self.sendPayload(hb_payload) catch |err| {
+            self.sendHeartbeatNow() catch |err| {
                 switch (err) {
                     error.NotConnected => return,
                     else => {
@@ -444,7 +560,6 @@ pub const Shard = struct {
                     },
                 }
             };
-            self.hb.markSent(std.time.milliTimestamp());
 
             std.time.sleep(self.hb.interval_ms * std.time.ns_per_ms);
         }
@@ -462,27 +577,30 @@ pub const Shard = struct {
 
     /// WebSocket receive loop. Runs in a dedicated thread.
     /// Parses frames, handles control frames, and dispatches text payloads.
+    /// Reads upgrade leftover bytes before further TLS socket reads.
     pub fn receiveLoop(self: *Shard) void {
         self.receive_mutex.lock();
         const stream_opt = self.stream;
-        const tls_client_ptr: ?*std.crypto.tls.Client = if (self.tls_client) |*tls| tls else null;
         self.receive_mutex.unlock();
 
-        const stream = stream_opt orelse {
+        if (stream_opt == null) {
             self.status = .disconnected;
             return;
-        };
+        }
 
         var buffer: [4096]u8 = undefined;
-        var tls_stream: ?TLSStream = if (tls_client_ptr) |ptr| TLSStream{ .tcp = stream, .client = ptr } else null;
+        var ws_byte_reader = WsByteReader{ .shard = self };
         while (self.running.load(.monotonic)) {
-            const reader = if (tls_stream) |*ts| ts.reader().any() else stream.reader().any();
-
             if (!builtin.is_test) {
                 std.log.debug("receiveLoop waiting for frame...", .{});
             }
 
+            // Serialize all TLS read/write: std.crypto.tls.Client is not thread-safe.
+            // Hold the mutex for the full frame parse (and control replies below).
+            self.receive_mutex.lock();
+            const reader = ws_byte_reader.reader().any();
             var frame = websocket.parseFrame(reader, self.allocator, &buffer) catch |err| {
+                self.receive_mutex.unlock();
                 self.status = .resuming;
                 switch (err) {
                     error.EndOfStream,
@@ -490,31 +608,38 @@ pub const Shard = struct {
                     error.BrokenPipe,
                     error.NotOpenForReading,
                     error.ConnectionTimedOut,
+                    error.NotConnected,
+                    error.TlsConnectionTruncated,
                     => break,
                     else => {
-                        if (!builtin.is_test) {
+                        // During intentional disconnect, socket shutdown surfaces as various IO errors.
+                        if (!builtin.is_test and self.running.load(.monotonic)) {
                             std.log.err("frame parse error: {s}", .{@errorName(err)});
                         }
                         break;
                     },
                 }
             };
-            defer frame.deinit();
-
+            // Keep mutex through control replies that write; unlock before dispatch work.
             if (!builtin.is_test) {
-                std.log.debug("receiveLoop received frame opcode={s} payload_len={d}", .{@tagName(frame.opcode), frame.payload.len});
+                std.log.debug("receiveLoop received frame opcode={s} payload_len={d}", .{ @tagName(frame.opcode), frame.payload.len });
             }
 
             switch (frame.opcode) {
                 .text => {
-                    self.handleFramePayload(frame.payload) catch |err| {
+                    // Copy payload if owned=false (lives in buffer) before unlock? handleFramePayload
+                    // parses synchronously; buffer is only reused after frame.deinit + next parse.
+                    const payload_copy = frame.payload;
+                    self.receive_mutex.unlock();
+                    defer frame.deinit();
+                    self.handleFramePayload(payload_copy) catch |err| {
                         if (!builtin.is_test) {
                             std.log.err("payload handle error: {s}", .{@errorName(err)});
                         }
                     };
+                    continue;
                 },
                 .ping => {
-                    self.receive_mutex.lock();
                     if (self.stream) |s| {
                         if (self.tls_client) |*tls| {
                             var ping_tls_stream = TLSStream{ .tcp = s, .client = tls };
@@ -525,22 +650,18 @@ pub const Shard = struct {
                             websocket.serializeFrame(writer.any(), .pong, frame.payload) catch {};
                         }
                     }
+                    frame.deinit();
                     self.receive_mutex.unlock();
                 },
                 .pong => {
-                    // Heartbeat ack or keepalive
+                    frame.deinit();
+                    self.receive_mutex.unlock();
                 },
                 .close => {
                     const close_code = if (frame.payload.len >= 2)
                         std.mem.readInt(u16, frame.payload[0..2], .big)
                     else
                         null;
-                    self.processCloseCode(close_code) catch |err| {
-                        if (!builtin.is_test) std.log.err("processCloseCode error: {s}", .{@errorName(err)});
-                    };
-                    // Echo close code back (RFC 6455)
-                    self.receive_mutex.lock();
-                    defer self.receive_mutex.unlock();
                     if (self.stream) |s| {
                         if (self.tls_client) |*tls| {
                             var close_tls_stream = TLSStream{ .tcp = s, .client = tls };
@@ -553,10 +674,18 @@ pub const Shard = struct {
                             websocket.serializeClose(writer.any(), code_to_echo, null) catch {};
                         }
                     }
+                    frame.deinit();
+                    self.receive_mutex.unlock();
+                    self.processCloseCode(close_code) catch |err| {
+                        if (!builtin.is_test) std.log.err("processCloseCode error: {s}", .{@errorName(err)});
+                    };
                     self.status = .disconnected;
                     break;
                 },
-                else => {},
+                else => {
+                    frame.deinit();
+                    self.receive_mutex.unlock();
+                },
             }
         }
 
@@ -566,6 +695,7 @@ pub const Shard = struct {
             self.stream = null;
         }
         self.tls_client = null;
+        self.clearWsPending();
         self.receive_mutex.unlock();
         self.status = .disconnected;
     }
