@@ -7,3 +7,4 @@ build/
 docgen_tmp/
 .claude/
 CLAUDE.md
+why-error/
