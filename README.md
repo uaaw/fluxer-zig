@@ -390,6 +390,7 @@ The `why-error/` directory is a local sandbox (gitignored). It is not part of th
 
 - **Gateway TLS (wss://) is now supported (beta).** `Shard.connect()` uses `std.crypto.tls.Client` with the OS CA bundle for TLS handshake. Certificate verification is enabled by default; if the OS CA bundle cannot be scanned, the handshake may fail on TLS-only endpoints.
 - **Slash / application commands are not available on Fluxer yet.** Library helpers such as `createGlobalCommand` are ready for Discord-style routes, but Fluxer does not expose them; prefer the message-based pattern above until the platform adds support.
+- **`Client.run()` reconnect loop is incomplete.** Prefer `Client.connect()` plus your own keep-alive / process lifetime (for example sleep until signal). `run` is experimental and does not fully implement clean reconnect stacking for long-lived bots.
 
 ## Contributing
 
